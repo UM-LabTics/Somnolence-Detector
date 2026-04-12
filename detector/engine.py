@@ -23,7 +23,7 @@ DEFAULT_CONFIG = {
     "mar_threshold": 0.55,
     "yawn_consec_frames": 30,  # ~1s at 30fps
     # Head pose / Nod
-    "pitch_threshold": 15.0,  # degrees
+    "pitch_threshold": 140.0,  # degrees; see _check_head_nod for semantics
     "nod_consec_frames": 25,  # ~0.8s at 30fps
     "nod_sustained_frames": 75,  # ~2.5s for HIGH
     # MediaPipe
@@ -216,12 +216,21 @@ class DetectionEngine:
         return events
 
     def _check_head_nod(self, pitch):
-        """Generate HEAD_NOD events. MEDIUM on detection, HIGH on sustained."""
+        """Generate HEAD_NOD events. MEDIUM on detection, HIGH on sustained.
+
+        Euler pitch from cv2.RQDecomp3x3 wraps around ±180. Observed convention:
+            Head upright:       pitch ≈ ±180 (at the wrap boundary)
+            Head tilted up:     pitch positive, decreasing from 180 → 170 → 150 → ...
+            Head tilted down:   pitch negative, increasing from -180 → -170 → -150 → ...
+
+        A nod is detected when pitch is in [-pitch_threshold, 0), meaning the head
+        has tilted forward enough that pitch moved away from the -180 wrap boundary
+        toward 0. With pitch_threshold = 140, this triggers for pitch in [-140, 0).
+        """
         events = []
         cfg = self._config
 
-        # Negative pitch = head tilting forward (nodding)
-        if pitch < -cfg["pitch_threshold"]:
+        if -cfg["pitch_threshold"] <= pitch < 0:
             self._pitch_above_count += 1
 
             if (
@@ -233,8 +242,8 @@ class DetectionEngine:
                     DetectionEvent(
                         alert_type="HEAD_NOD",
                         severity="MEDIUM",
-                        value=round(abs(pitch), 1),
-                        threshold=cfg["pitch_threshold"],
+                        value=round(pitch, 1),
+                        threshold=-cfg["pitch_threshold"],
                     )
                 )
 
@@ -247,8 +256,8 @@ class DetectionEngine:
                     DetectionEvent(
                         alert_type="HEAD_NOD",
                         severity="HIGH",
-                        value=round(abs(pitch), 1),
-                        threshold=cfg["pitch_threshold"],
+                        value=round(pitch, 1),
+                        threshold=-cfg["pitch_threshold"],
                     )
                 )
         else:

@@ -15,7 +15,7 @@ _DETECTION_DEFAULTS = {
     "perclos_high_threshold": 0.80,
     "mar_threshold": 0.55,
     "yawn_consec_frames": 30,
-    "pitch_threshold": 15.0,
+    "pitch_threshold": 140.0,
     "nod_consec_frames": 25,
     "nod_sustained_frames": 75,
     "max_num_faces": 1,

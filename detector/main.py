@@ -82,7 +82,7 @@ def draw_metrics(frame, metrics, config):
     y = 60
     pitch_color = (
         (0, 0, 255)
-        if abs(metrics.pitch) > config["pitch_threshold"]
+        if -config["pitch_threshold"] <= metrics.pitch < 0
         else (0, 255, 0)
     )
     cv2.putText(
