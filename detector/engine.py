@@ -16,14 +16,14 @@ DEFAULT_CONFIG = {
     # EAR / PERCLOS
     "ear_threshold": 0.21,
     "perclos_window_seconds": 60.0,
-    "perclos_low_threshold": 0.60,
-    "perclos_medium_threshold": 0.70,
-    "perclos_high_threshold": 0.80,
+    "perclos_low_threshold": 0.15,
+    "perclos_medium_threshold": 0.25,
+    "perclos_high_threshold": 0.40,
     # MAR / Yawn
     "mar_threshold": 0.55,
     "yawn_consec_frames": 30,  # ~1s at 30fps
     # Head pose / Nod
-    "pitch_threshold": 140.0,  # degrees; see _check_head_nod for semantics
+    "pitch_threshold": 150.0,  # degrees; see _check_head_nod for semantics
     "nod_consec_frames": 25,  # ~0.8s at 30fps
     "nod_sustained_frames": 75,  # ~2.5s for HIGH
     # MediaPipe
@@ -225,7 +225,7 @@ class DetectionEngine:
 
         A nod is detected when pitch is in [-pitch_threshold, 0), meaning the head
         has tilted forward enough that pitch moved away from the -180 wrap boundary
-        toward 0. With pitch_threshold = 140, this triggers for pitch in [-140, 0).
+        toward 0. With pitch_threshold = 150, this triggers for pitch in [-150, 0).
         """
         events = []
         cfg = self._config

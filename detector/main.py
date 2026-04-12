@@ -55,11 +55,11 @@ def draw_metrics(frame, metrics, config):
     )
 
     perclos_pct = metrics.perclos * 100
-    if perclos_pct >= 80:
+    if metrics.perclos >= config["perclos_high_threshold"]:
         perclos_color = (0, 0, 255)
-    elif perclos_pct >= 70:
+    elif metrics.perclos >= config["perclos_medium_threshold"]:
         perclos_color = (0, 165, 255)
-    elif perclos_pct >= 60:
+    elif metrics.perclos >= config["perclos_low_threshold"]:
         perclos_color = (0, 255, 255)
     else:
         perclos_color = (0, 255, 0)
