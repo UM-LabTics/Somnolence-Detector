@@ -2,3 +2,4 @@ mediapipe>=0.10.14
 opencv-python>=4.9.0
 numpy>=1.26,<2.1
 paho-mqtt==2.1.0
+ultralytics>=8.0

@@ -1,17 +1,22 @@
-"""Phone usage detection via MediaPipe Hands + hand-to-ear distance.
+"""Phone usage detection via MediaPipe Hands + hand-to-ear distance + YOLO object detection.
 
-The driver's hand held near the ear is the classic phone-call gesture.
-This module wraps MediaPipe Hands and provides a pure function that
-computes the minimum Euclidean distance (normalized [0,1] space) between
-any of a set of representative hand landmarks and either ear tragion
-landmark from MediaPipe FaceMesh.
+Two-condition strategy:
+  1. Hand near ear  — MediaPipe Hands landmark distance to ear tragion.
+  2. Phone visible  — YOLOv8n detects COCO class 67 ("cell phone") in the frame.
+
+Both conditions must be true for a PHONE_USE alert to fire.
+If ultralytics is not installed or the model cannot load, condition 2 is
+skipped and the detector falls back to hand-only behaviour.
 """
 
+import logging
 import math
 from typing import Optional
 
 import mediapipe as mp
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 # MediaPipe FaceMesh indices for ear tragion (front of the ear, where
 # a phone earpiece touches the head).
@@ -59,6 +64,64 @@ class HandDetector:
 
     def close(self):
         self._hands.close()
+
+
+class PhoneObjectDetector:
+    """Detects 'cell phone' objects in a frame using YOLOv8n.
+
+    Runs inference every `skip_frames` frames and caches the last result
+    to keep CPU usage low on embedded hardware.
+
+    If ultralytics is unavailable, `available` is False and `detect()`
+    always returns True so the hand-distance check is the sole gate.
+    """
+
+    PHONE_CLASS_ID = 67  # COCO class index for "cell phone"
+
+    def __init__(self, confidence: float = 0.4, skip_frames: int = 3):
+        self._confidence = confidence
+        self._skip_frames = max(1, skip_frames)
+        self._frame_count = 0
+        self._last_result = False
+        self._model = None
+        self.available = False
+
+        try:
+            from ultralytics import YOLO  # noqa: PLC0415
+            self._model = YOLO("yolov8n.pt")
+            # Suppress ultralytics verbose output after first load
+            self._model.overrides["verbose"] = False
+            self.available = True
+            logger.info("PhoneObjectDetector: YOLOv8n loaded (COCO class 67)")
+        except Exception as exc:
+            logger.warning(
+                "PhoneObjectDetector: ultralytics unavailable — "
+                "falling back to hand-only detection. (%s)", exc
+            )
+
+    def detect(self, bgr_frame) -> bool:
+        """Return True if a cell phone is visible in the frame.
+
+        Always returns True when YOLO is unavailable (passthrough).
+        """
+        if not self.available:
+            return True
+
+        self._frame_count += 1
+        if self._frame_count % self._skip_frames != 0:
+            return self._last_result
+
+        results = self._model(
+            bgr_frame,
+            classes=[self.PHONE_CLASS_ID],
+            conf=self._confidence,
+            verbose=False,
+        )
+        self._last_result = any(len(r.boxes) > 0 for r in results)
+        return self._last_result
+
+    def close(self) -> None:
+        self._model = None
 
 
 def compute_min_hand_ear_distance(

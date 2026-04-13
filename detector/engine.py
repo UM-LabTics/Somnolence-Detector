@@ -11,7 +11,7 @@ from ear import LEFT_EYE, RIGHT_EYE, compute_ear
 from head_pose import estimate_head_pose
 from mar import compute_mar
 from perclos import PerclosTracker
-from phone_detector import HandDetector, compute_min_hand_ear_distance
+from phone_detector import HandDetector, PhoneObjectDetector, compute_min_hand_ear_distance
 
 # Default configuration
 DEFAULT_CONFIG = {
@@ -75,6 +75,7 @@ class FrameMetrics:
     hand_detected: bool = False
     closest_hand_xy: Optional[tuple] = None
     closest_ear_xy: Optional[tuple] = None
+    phone_object_detected: bool = False
 
 
 class DetectionEngine:
@@ -125,6 +126,15 @@ class DetectionEngine:
             min_detection_confidence=cfg["min_detection_confidence"],
             min_tracking_confidence=cfg["min_tracking_confidence"],
         )
+
+        # YOLO phone object detector
+        if cfg.get("yolo_enabled", True):
+            self._phone_object_detector = PhoneObjectDetector(
+                confidence=cfg.get("yolo_confidence", 0.4),
+                skip_frames=cfg.get("yolo_skip_frames", 3),
+            )
+        else:
+            self._phone_object_detector = None
 
         # State: Phone use detection (HEAD_NOD-like: MEDIUM then HIGH)
         self._phone_close_count = 0
@@ -181,7 +191,7 @@ class DetectionEngine:
             metrics.roll = roll
             events.extend(self._check_head_nod(pitch))
 
-        # 4. Phone use (hand near ear). Requires face landmarks for ear pts.
+        # 4. Phone use: hand near ear AND phone object detected by YOLO.
         hand_results = self._hand_detector.process(rgb)
         distance, hand_detected, hand_xy, ear_xy = compute_min_hand_ear_distance(
             hand_results.multi_hand_landmarks, landmarks
@@ -190,7 +200,14 @@ class DetectionEngine:
         metrics.hand_detected = hand_detected
         metrics.closest_hand_xy = hand_xy
         metrics.closest_ear_xy = ear_xy
-        events.extend(self._check_phone_use(distance))
+
+        if self._phone_object_detector is not None:
+            phone_object = self._phone_object_detector.detect(frame)
+        else:
+            phone_object = True  # YOLO disabled: hand-only gate
+        metrics.phone_object_detected = phone_object
+
+        events.extend(self._check_phone_use(distance, phone_object))
 
         return events, metrics
 
@@ -303,18 +320,19 @@ class DetectionEngine:
 
         return events
 
-    def _check_phone_use(self, distance):
+    def _check_phone_use(self, distance, phone_object: bool):
         """Generate PHONE_USE events. MEDIUM on detection, HIGH on sustained.
 
-        Fires when a hand landmark (wrist, thumb tip, index tip, or palm
-        center) is within phone_distance_threshold of either ear tragion
-        for phone_consec_frames consecutive frames. Escalates to HIGH
-        when sustained for phone_sustained_frames (patron HEAD_NOD).
+        Requires both conditions to be true simultaneously:
+          - hand landmark within phone_distance_threshold of an ear tragion
+          - YOLO detects a cell phone in the frame (or YOLO is disabled)
+
+        Escalates to HIGH when sustained for phone_sustained_frames.
         """
         events = []
         cfg = self._config
 
-        if distance < cfg["phone_distance_threshold"]:
+        if distance < cfg["phone_distance_threshold"] and phone_object:
             self._phone_close_count += 1
 
             if (
@@ -370,3 +388,5 @@ class DetectionEngine:
         """Release MediaPipe resources."""
         self._face_mesh.close()
         self._hand_detector.close()
+        if self._phone_object_detector is not None:
+            self._phone_object_detector.close()

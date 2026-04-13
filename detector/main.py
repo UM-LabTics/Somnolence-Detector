@@ -96,8 +96,9 @@ def draw_metrics(frame, metrics, config):
         2,
     )
 
-    # Line 3: Hand-Ear distance (phone use detection)
+    # Line 3: Hand-Ear distance + YOLO phone indicator
     y = 90
+    phone_indicator = " [PHONE]" if metrics.phone_object_detected else ""
     if metrics.hand_detected:
         dist_color = (
             (0, 0, 255)
@@ -106,7 +107,7 @@ def draw_metrics(frame, metrics, config):
         )
         cv2.putText(
             frame,
-            f"Hand-Ear: {metrics.hand_ear_distance:.3f}",
+            f"Hand-Ear: {metrics.hand_ear_distance:.3f}{phone_indicator}",
             (10, y),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.6,
@@ -131,7 +132,7 @@ def draw_metrics(frame, metrics, config):
     else:
         cv2.putText(
             frame,
-            "Hand-Ear: -",
+            f"Hand-Ear: -{phone_indicator}",
             (10, y),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.6,
@@ -177,7 +178,7 @@ def main():
 
     sync_manager.start()
 
-    cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture(0, cv2.CAP_AVFOUNDATION)
     active_alerts = []
     last_env_time = 0.0
 

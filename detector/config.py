@@ -70,6 +70,11 @@ def load_config() -> dict:
     config["batch_size"] = 50
     config["db_path"] = str(Path(__file__).parent / "somnolence_local.db")
 
+    # YOLO phone object detection
+    config["yolo_enabled"] = os.environ.get("YOLO_ENABLED", "true").lower() == "true"
+    config["yolo_confidence"] = float(os.environ.get("YOLO_CONFIDENCE", "0.4"))
+    config["yolo_skip_frames"] = int(os.environ.get("YOLO_SKIP_FRAMES", "3"))
+
     # Sensors & Actuators
     config["environmental_interval"] = 30.0
     config["mock_sensors"] = os.environ.get("MOCK_SENSORS", "true").lower() == "true"
