@@ -247,9 +247,10 @@ def main():
             actuator.activate(event.severity)
             active_alerts.append((event, now_mono + ALERT_DISPLAY_SECONDS))
             label = ALERT_LABELS.get(event.alert_type, event.alert_type)
+            meta_str = f" meta={event.metadata}" if event.metadata else ""
             logger.info(
                 f"[ALERT] {label} severity={event.severity} "
-                f"value={event.value} threshold={event.threshold}"
+                f"value={event.value} threshold={event.threshold}{meta_str}"
             )
 
         # Environmental readings at configured interval
