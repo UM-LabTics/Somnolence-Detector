@@ -10,6 +10,7 @@ const ALERT_TYPE_LABELS: Record<string, string> = {
   YAWN: "Bostezo",
   HEAD_NOD: "Cabeceo",
   PHONE_USE: "Uso de celular",
+  PHONE_OBJECT: "Celular detectado",
 };
 
 export function formatAlertType(type: string): string {

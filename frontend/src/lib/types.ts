@@ -1,4 +1,4 @@
-export type AlertType = "EYE_CLOSURE" | "YAWN" | "HEAD_NOD" | "PHONE_USE";
+export type AlertType = "EYE_CLOSURE" | "YAWN" | "HEAD_NOD" | "PHONE_USE" | "PHONE_OBJECT";
 export type Severity = "LOW" | "MEDIUM" | "HIGH";
 
 export interface EnvironmentalAverages {

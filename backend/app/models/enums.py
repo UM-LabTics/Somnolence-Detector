@@ -6,6 +6,7 @@ class AlertType(str, enum.Enum):
     YAWN = "YAWN"
     HEAD_NOD = "HEAD_NOD"
     PHONE_USE = "PHONE_USE"
+    PHONE_OBJECT = "PHONE_OBJECT"
 
 
 class Severity(str, enum.Enum):

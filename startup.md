@@ -265,6 +265,66 @@ Errores comunes:
 
 ---
 
+## Activar deteccion YOLO del celular (opcional)
+
+El detector soporta un segundo canal que identifica el celular como objeto con YOLO11n + NCNN, ademas del Hand-Ear existente. Corre en un thread aparte y es opt-in via env var.
+
+### 1. Exportar el modelo (una vez, en laptop)
+
+**No hacer esto en la Pi** — ultralytics arrastra torch (~300 MB).
+
+```bash
+# En tu laptop
+cd ~/UM/ProyectoTIC2/Somnolence-Detector
+pip install ultralytics
+python scripts/export_yolo_ncnn.py
+```
+
+Genera `detector/models/yolo11n_416.ncnn.param` (~50 KB) y `yolo11n_416.ncnn.bin` (~3 MB). Commitealos o copialos a la Pi con `scp`.
+
+### 2. Instalar ncnn en la Pi (o en la Mac para pruebas)
+
+```bash
+cd detector
+source venv/bin/activate
+pip install ncnn
+```
+
+### 3. Recrear la base de datos (solo una vez)
+
+`AlertType` en Postgres es un enum nativo. Agregar `PHONE_OBJECT` al codigo no altera el tipo existente en la DB; hay que recrearla:
+
+```bash
+# En la Mac
+docker compose down -v     # borra volumenes — perdes historial de alertas
+docker compose up -d
+```
+
+Alternativa sin perder datos (ejecutar dentro del contenedor de postgres):
+```bash
+docker compose exec postgres psql -U postgres -d somnolence \
+  -c "ALTER TYPE alerttype ADD VALUE 'PHONE_OBJECT';"
+```
+
+### 4. Lanzar con YOLO activado
+
+```bash
+export YOLO_ENABLED=true
+python main.py
+```
+
+En los logs deberia aparecer que el worker arranca. Con un celular sostenido en la mano frente a la camara, a los ~2.5s empieza a publicar alertas `PHONE_OBJECT` MEDIUM, y a los ~10s escala a HIGH. En el dashboard aparece como **"Celular detectado"** separado de **"Uso de celular"** (Hand-Ear).
+
+### 5. Benchmarkear la latencia en la Pi
+
+```bash
+python scripts/benchmark_yolo.py
+# Target: p95 < 200 ms a 416x416. Si excede, editar detector/config.py
+# y setear yolo_input_size=320 (mas rapido, menos preciso).
+```
+
+---
+
 ## Testing sin Pi (solo Mac)
 
 Para probar el stack sin la Pi, podes usar el simulador MQTT:
@@ -274,7 +334,7 @@ Para probar el stack sin la Pi, podes usar el simulador MQTT:
 python3 scripts/mqtt_simulator.py --broker localhost --interval 5 --alert-chance 0.5
 ```
 
-Genera un device ficticio y publica alertas aleatorias (incluye `PHONE_USE`). Util para demos del dashboard sin la Pi fisica.
+Genera un device ficticio y publica alertas aleatorias (incluye `PHONE_USE` y `PHONE_OBJECT`). Util para demos del dashboard sin la Pi fisica.
 
 ---
 

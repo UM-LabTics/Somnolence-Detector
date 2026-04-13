@@ -14,6 +14,7 @@ const TYPE_META: Record<string, { tone: string; code: string }> = {
   YAWN: { tone: "bg-warn/85", code: "YWN" },
   HEAD_NOD: { tone: "bg-chart-1/85", code: "HED" },
   PHONE_USE: { tone: "bg-chart-5/85", code: "PHN" },
+  PHONE_OBJECT: { tone: "bg-chart-4/85", code: "PHO" },
 };
 
 export function AlertsByTypeChart({

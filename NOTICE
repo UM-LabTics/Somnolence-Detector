@@ -1,0 +1,31 @@
+Somnolence-Detector
+===================
+
+This product includes software developed by third parties:
+
+1. Ultralytics YOLO11
+   https://github.com/ultralytics/ultralytics
+   Licensed under AGPL-3.0-or-later.
+   Pre-trained YOLO11n weights (COCO) are used for cell-phone object
+   detection. The weights themselves are distributed by Ultralytics
+   under the same AGPL-3.0 license.
+
+2. Tencent NCNN
+   https://github.com/Tencent/ncnn
+   Licensed under BSD-3-Clause.
+   Used as the inference runtime on Raspberry Pi for the YOLO model
+   exported via `scripts/export_yolo_ncnn.py`.
+
+3. Google MediaPipe
+   https://github.com/google/mediapipe
+   Licensed under Apache-2.0.
+   Used for face-mesh and hand landmark tracking in the edge detector.
+
+4. OpenCV
+   https://github.com/opencv/opencv
+   Licensed under Apache-2.0.
+
+Because this project links against AGPL-3.0 code (Ultralytics), the
+combined source is distributed under AGPL-3.0-or-later. Any derivative
+that offers this system as a network-accessible service must publish
+the complete source under the same license.
