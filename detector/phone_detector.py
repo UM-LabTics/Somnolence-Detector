@@ -104,3 +104,21 @@ def compute_min_hand_ear_distance(
                     closest_ear = ep
 
     return min_d, True, closest_hand, closest_ear
+
+
+def hand_bbox_from_landmarks(
+    hand_landmarks, padding: float = 0.04
+) -> tuple[float, float, float, float]:
+    """Build a normalized [0,1] bbox enclosing all 21 hand landmarks.
+
+    Padding extends each side outward to account for the hand's skin
+    outside the keypoint set, clamped to the [0,1] frame.
+    """
+    xs = [lm.x for lm in hand_landmarks.landmark]
+    ys = [lm.y for lm in hand_landmarks.landmark]
+    return (
+        max(0.0, min(xs) - padding),
+        max(0.0, min(ys) - padding),
+        min(1.0, max(xs) + padding),
+        min(1.0, max(ys) + padding),
+    )

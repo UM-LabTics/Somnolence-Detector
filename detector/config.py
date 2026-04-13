@@ -28,6 +28,23 @@ _DETECTION_DEFAULTS = {
     "phone_sustained_frames": 90,
     "max_num_hands": 2,
     "hands_model_complexity": 0,
+    # Phone object (YOLO11n + NCNN) - opt-in via YOLO_ENABLED env var
+    "yolo_enabled": False,
+    "yolo_param_path": str(
+        Path(__file__).parent / "models" / "yolo11n_416.ncnn.param"
+    ),
+    "yolo_bin_path": str(
+        Path(__file__).parent / "models" / "yolo11n_416.ncnn.bin"
+    ),
+    "yolo_confidence": 0.35,
+    "yolo_iou": 0.45,
+    "yolo_input_size": 416,
+    "yolo_num_threads": 4,
+    "yolo_stale_max_age_s": 0.5,
+    "phone_object_iou_hand_threshold": 0.15,
+    "phone_object_dist_ear_threshold": 0.30,
+    "phone_object_consec_frames": 15,     # ~2.5s at 6 Hz effective
+    "phone_object_sustained_frames": 60,  # ~10s at 6 Hz effective
 }
 
 
@@ -74,5 +91,10 @@ def load_config() -> dict:
     config["environmental_interval"] = 30.0
     config["mock_sensors"] = os.environ.get("MOCK_SENSORS", "true").lower() == "true"
     config["mock_actuators"] = os.environ.get("MOCK_ACTUATORS", "true").lower() == "true"
+
+    # YOLO object detection (opt-in, requires ncnn + model files)
+    config["yolo_enabled"] = (
+        os.environ.get("YOLO_ENABLED", "false").lower() == "true"
+    )
 
     return config

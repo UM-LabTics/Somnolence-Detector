@@ -8,10 +8,18 @@ import mediapipe as mp
 import numpy as np
 
 from ear import LEFT_EYE, RIGHT_EYE, compute_ear
+from geometry import dist, iou
 from head_pose import estimate_head_pose
 from mar import compute_mar
 from perclos import PerclosTracker
-from phone_detector import HandDetector, compute_min_hand_ear_distance
+from phone_detector import (
+    LEFT_EAR_IDX,
+    RIGHT_EAR_IDX,
+    HandDetector,
+    compute_min_hand_ear_distance,
+    hand_bbox_from_landmarks,
+)
+from yolo_phone_detector import create_yolo_worker
 
 # Default configuration
 DEFAULT_CONFIG = {
@@ -39,6 +47,19 @@ DEFAULT_CONFIG = {
     "phone_sustained_frames": 90,   # ~3s -> HIGH
     "max_num_hands": 2,
     "hands_model_complexity": 0,    # 0=Lite, 1=Full (Pi 5 should use 0)
+    # Phone object (YOLO11n + NCNN) - opt-in via YOLO_ENABLED env var
+    "yolo_enabled": False,
+    "yolo_param_path": "",  # resolved by config.load_config()
+    "yolo_bin_path": "",
+    "yolo_confidence": 0.35,
+    "yolo_iou": 0.45,
+    "yolo_input_size": 416,
+    "yolo_num_threads": 4,
+    "yolo_stale_max_age_s": 0.5,
+    "phone_object_iou_hand_threshold": 0.15,
+    "phone_object_dist_ear_threshold": 0.30,
+    "phone_object_consec_frames": 15,
+    "phone_object_sustained_frames": 60,
 }
 
 _SEVERITY_ORDER = {None: 0, "LOW": 1, "MEDIUM": 2, "HIGH": 3}
@@ -52,7 +73,7 @@ class DetectionEvent:
     for direct MQTT serialization.
     """
 
-    alert_type: str  # "EYE_CLOSURE", "YAWN", "HEAD_NOD"
+    alert_type: str  # "EYE_CLOSURE", "YAWN", "HEAD_NOD", "PHONE_USE", "PHONE_OBJECT"
     severity: str  # "LOW", "MEDIUM", "HIGH"
     value: float  # measured value
     threshold: float  # threshold crossed
@@ -75,6 +96,9 @@ class FrameMetrics:
     hand_detected: bool = False
     closest_hand_xy: Optional[tuple] = None
     closest_ear_xy: Optional[tuple] = None
+    phone_object_detected: bool = False
+    phone_object_bbox: Optional[tuple] = None  # (x1, y1, x2, y2) normalized
+    phone_object_conf: float = 0.0
 
 
 class DetectionEngine:
@@ -130,6 +154,16 @@ class DetectionEngine:
         self._phone_close_count = 0
         self._in_phone_use = False
         self._phone_alerted_high = False
+
+        # YOLO phone-object worker (None if disabled or ncnn unavailable)
+        self._yolo = create_yolo_worker(self._config)
+        if self._yolo is not None:
+            self._yolo.start()
+
+        # State: Phone object detection (YOLO + fusion)
+        self._phone_object_count = 0
+        self._in_phone_object = False
+        self._phone_object_alerted_high = False
 
     def process(self, frame):
         """Process a single BGR frame.
@@ -191,6 +225,33 @@ class DetectionEngine:
         metrics.closest_hand_xy = hand_xy
         metrics.closest_ear_xy = ear_xy
         events.extend(self._check_phone_use(distance))
+
+        # 5. Phone object detection (YOLO, opt-in). Runs on a worker thread
+        #    so heavy inference does not block the 30 FPS pipeline.
+        if self._yolo is not None:
+            self._yolo.submit(frame, now)
+            bbox = self._yolo.get_latest()
+            metrics.phone_object_detected = bbox is not None
+            metrics.phone_object_bbox = (
+                (bbox.x1, bbox.y1, bbox.x2, bbox.y2) if bbox else None
+            )
+            metrics.phone_object_conf = bbox.conf if bbox else 0.0
+            left_ear_xy = (
+                landmarks[LEFT_EAR_IDX].x,
+                landmarks[LEFT_EAR_IDX].y,
+            )
+            right_ear_xy = (
+                landmarks[RIGHT_EAR_IDX].x,
+                landmarks[RIGHT_EAR_IDX].y,
+            )
+            events.extend(
+                self._check_phone_object(
+                    bbox,
+                    hand_results.multi_hand_landmarks,
+                    left_ear_xy,
+                    right_ear_xy,
+                )
+            )
 
         return events, metrics
 
@@ -353,6 +414,89 @@ class DetectionEngine:
 
         return events
 
+    def _check_phone_object(self, bbox, hand_landmarks_list, left_ear, right_ear):
+        """Generate PHONE_OBJECT events using YOLO bbox fused with context.
+
+        Fires when YOLO confidently detects a phone AND at least one of:
+          - the phone bbox overlaps with a hand (IoU > threshold)
+          - the phone is near either ear
+          - the head is nodding (driver looking down at device)
+        Escalates MEDIUM -> HIGH by consecutive frames, mirroring
+        _check_phone_use.
+        """
+        events = []
+        cfg = self._config
+
+        if bbox is None or bbox.conf < cfg["yolo_confidence"]:
+            self._phone_object_count = 0
+            self._in_phone_object = False
+            self._phone_object_alerted_high = False
+            return events
+
+        bbox_tuple = (bbox.x1, bbox.y1, bbox.x2, bbox.y2)
+        iou_max = 0.0
+        if hand_landmarks_list:
+            for hand in hand_landmarks_list:
+                hb = hand_bbox_from_landmarks(hand)
+                iou_max = max(iou_max, iou(bbox_tuple, hb))
+
+        center = bbox.center
+        dist_ear = min(dist(center, left_ear), dist(center, right_ear))
+
+        trigger = None
+        if iou_max > cfg["phone_object_iou_hand_threshold"]:
+            trigger = "iou_hand"
+        elif dist_ear < cfg["phone_object_dist_ear_threshold"]:
+            trigger = "near_ear"
+        elif self._in_nod:
+            trigger = "head_nod"
+
+        if trigger is None:
+            self._phone_object_count = 0
+            self._in_phone_object = False
+            self._phone_object_alerted_high = False
+            return events
+
+        self._phone_object_count += 1
+        meta = {
+            "conf": round(bbox.conf, 3),
+            "iou_hand": round(iou_max, 3),
+            "dist_ear": round(dist_ear, 3),
+            "trigger": trigger,
+        }
+
+        if (
+            self._phone_object_count >= cfg["phone_object_consec_frames"]
+            and not self._in_phone_object
+        ):
+            self._in_phone_object = True
+            events.append(
+                DetectionEvent(
+                    alert_type="PHONE_OBJECT",
+                    severity="MEDIUM",
+                    value=round(bbox.conf, 3),
+                    threshold=cfg["yolo_confidence"],
+                    metadata=meta,
+                )
+            )
+
+        if (
+            self._phone_object_count >= cfg["phone_object_sustained_frames"]
+            and not self._phone_object_alerted_high
+        ):
+            self._phone_object_alerted_high = True
+            events.append(
+                DetectionEvent(
+                    alert_type="PHONE_OBJECT",
+                    severity="HIGH",
+                    value=round(bbox.conf, 3),
+                    threshold=cfg["yolo_confidence"],
+                    metadata=meta,
+                )
+            )
+
+        return events
+
     def reset(self):
         """Reset all internal state."""
         self._perclos.reset()
@@ -365,8 +509,13 @@ class DetectionEngine:
         self._phone_close_count = 0
         self._in_phone_use = False
         self._phone_alerted_high = False
+        self._phone_object_count = 0
+        self._in_phone_object = False
+        self._phone_object_alerted_high = False
 
     def close(self):
         """Release MediaPipe resources."""
+        if self._yolo is not None:
+            self._yolo.stop()
         self._face_mesh.close()
         self._hand_detector.close()
