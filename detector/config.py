@@ -38,7 +38,7 @@ _DETECTION_DEFAULTS = {
     ),
     "yolo_confidence": 0.50,              # strict threshold for COCO-generic on webcam
     "yolo_iou": 0.45,
-    "yolo_input_size": 416,               # better precision; FPS recovered via threads & copy
+    "yolo_input_size": 320,               # Pi 5 CPU budget; ~40% less compute than 416
     "yolo_num_threads": 2,                # leaves 2 cores for MediaPipe
     "yolo_stale_max_age_s": 0.5,
     "yolo_min_box_area": 0.003,           # reject spurious tiny boxes

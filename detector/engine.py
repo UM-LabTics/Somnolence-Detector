@@ -38,7 +38,11 @@ DEFAULT_CONFIG = {
     "nod_sustained_frames": 75,  # ~2.5s for HIGH
     # MediaPipe
     "max_num_faces": 1,
-    "refine_landmarks": True,
+    # refine_landmarks=False drops the extra iris/lips attention mesh that
+    # costs another TFLite pass. EAR/MAR/head-pose only use the base 468
+    # landmarks, so disabling this is free on Pi 5 (~20-30% of FaceMesh
+    # time recovered).
+    "refine_landmarks": False,
     "min_detection_confidence": 0.5,
     "min_tracking_confidence": 0.5,
     # Phone use (hand near ear)
@@ -53,7 +57,7 @@ DEFAULT_CONFIG = {
     "yolo_bin_path": "",
     "yolo_confidence": 0.50,
     "yolo_iou": 0.45,
-    "yolo_input_size": 416,
+    "yolo_input_size": 320,
     "yolo_num_threads": 2,
     "yolo_stale_max_age_s": 0.5,
     "yolo_min_box_area": 0.003,

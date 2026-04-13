@@ -83,6 +83,12 @@ class YoloPhoneDetector:
         self._net = ncnn.Net()
         self._net.opt.use_vulkan_compute = False
         self._net.opt.num_threads = num_threads
+        # Cortex-A76 (Pi 5) supports ARMv8.2 FP16 natively. These three flags
+        # roughly halve inference time on compatible models. Safe to enable —
+        # ncnn silently falls back to FP32 on CPUs that don't support FP16.
+        self._net.opt.use_fp16_packed = True
+        self._net.opt.use_fp16_storage = True
+        self._net.opt.use_fp16_arithmetic = True
         self._net.load_param(param_path)
         self._net.load_model(bin_path)
 
