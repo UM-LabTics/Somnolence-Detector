@@ -51,15 +51,17 @@ DEFAULT_CONFIG = {
     "yolo_enabled": False,
     "yolo_param_path": "",  # resolved by config.load_config()
     "yolo_bin_path": "",
-    "yolo_confidence": 0.35,
+    "yolo_confidence": 0.50,
     "yolo_iou": 0.45,
     "yolo_input_size": 416,
-    "yolo_num_threads": 4,
+    "yolo_num_threads": 2,
     "yolo_stale_max_age_s": 0.5,
+    "yolo_min_box_area": 0.003,
+    "yolo_max_box_area": 0.60,
     "phone_object_iou_hand_threshold": 0.15,
     "phone_object_dist_ear_threshold": 0.30,
-    "phone_object_consec_frames": 15,
-    "phone_object_sustained_frames": 60,
+    "phone_object_consec_frames": 10,
+    "phone_object_sustained_frames": 45,
 }
 
 _SEVERITY_ORDER = {None: 0, "LOW": 1, "MEDIUM": 2, "HIGH": 3}

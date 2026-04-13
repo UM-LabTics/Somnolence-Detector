@@ -67,6 +67,8 @@ class YoloPhoneDetector:
         input_size: int = 416,
         num_threads: int = 4,
         target_class_id: int = 67,  # COCO "cell phone"
+        min_box_area: float = 0.003,   # fraction of frame, filter tiny spurious boxes
+        max_box_area: float = 0.6,     # filter absurdly large boxes
     ):
         if ncnn is None:
             raise ImportError("ncnn package is not installed")
@@ -75,12 +77,22 @@ class YoloPhoneDetector:
         self._iou = iou
         self._input_size = input_size
         self._target_class_id = target_class_id
+        self._min_box_area = min_box_area
+        self._max_box_area = max_box_area
 
         self._net = ncnn.Net()
         self._net.opt.use_vulkan_compute = False
         self._net.opt.num_threads = num_threads
         self._net.load_param(param_path)
         self._net.load_model(bin_path)
+
+        # Warmup: first inference is 500-1000 ms slower on Pi (weights load,
+        # memory allocator warmup, etc). Do it up front so the live loop is clean.
+        try:
+            dummy = np.zeros((input_size, input_size, 3), dtype=np.uint8)
+            self.detect(dummy)
+        except Exception:
+            pass
 
     def detect(self, frame_bgr: np.ndarray) -> list[PhoneBBox]:
         """Run one forward pass and return bboxes for the target class."""
@@ -188,6 +200,14 @@ class YoloPhoneDetector:
             if nx2 <= nx1 or ny2 <= ny1:
                 continue
 
+            # Reject boxes with implausible area (spurious tiny detections or
+            # absurdly large ones that almost never correspond to a real phone
+            # in a driver's hand). The phone in hand normally covers 1%-30% of
+            # the frame at the usage distance.
+            area = (nx2 - nx1) * (ny2 - ny1)
+            if area < self._min_box_area or area > self._max_box_area:
+                continue
+
             results.append(
                 PhoneBBox(
                     x1=nx1, y1=ny1, x2=nx2, y2=ny2,
@@ -229,16 +249,22 @@ class YoloWorker:
         self._thread.start()
 
     def submit(self, frame_bgr: np.ndarray, ts: float):
-        """Offer a frame for inference. Drops the oldest if queue is full."""
+        """Offer a frame for inference. Drops the oldest if queue is full.
+
+        The copy is critical: cv2.VideoCapture reuses its internal buffer and
+        MediaPipe mutates the frame in-place on the main thread. Without it,
+        the worker can race on a half-overwritten buffer.
+        """
+        snapshot = frame_bgr.copy()
         try:
-            self._q.put_nowait((frame_bgr, ts))
+            self._q.put_nowait((snapshot, ts))
         except queue.Full:
             try:
                 self._q.get_nowait()
             except queue.Empty:
                 pass
             try:
-                self._q.put_nowait((frame_bgr, ts))
+                self._q.put_nowait((snapshot, ts))
             except queue.Full:
                 pass
 
@@ -300,6 +326,8 @@ def create_yolo_worker(cfg: dict) -> Optional[YoloWorker]:
             iou=cfg["yolo_iou"],
             input_size=cfg["yolo_input_size"],
             num_threads=cfg["yolo_num_threads"],
+            min_box_area=cfg.get("yolo_min_box_area", 0.003),
+            max_box_area=cfg.get("yolo_max_box_area", 0.6),
         )
     except Exception as exc:
         logger.warning("Failed to load YOLO model: %s", exc)

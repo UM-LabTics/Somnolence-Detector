@@ -36,11 +36,13 @@ _DETECTION_DEFAULTS = {
     "yolo_bin_path": str(
         Path(__file__).parent / "models" / "yolo11n_416.ncnn.bin"
     ),
-    "yolo_confidence": 0.35,
+    "yolo_confidence": 0.50,              # strict threshold for COCO-generic on webcam
     "yolo_iou": 0.45,
-    "yolo_input_size": 320,
-    "yolo_num_threads": 2,
+    "yolo_input_size": 416,               # better precision; FPS recovered via threads & copy
+    "yolo_num_threads": 2,                # leaves 2 cores for MediaPipe
     "yolo_stale_max_age_s": 0.5,
+    "yolo_min_box_area": 0.003,           # reject spurious tiny boxes
+    "yolo_max_box_area": 0.60,            # reject absurdly large boxes
     "phone_object_iou_hand_threshold": 0.15,
     "phone_object_dist_ear_threshold": 0.30,
     "phone_object_consec_frames": 10,     # ~1.5s sustained pose
