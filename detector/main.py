@@ -1,3 +1,4 @@
+import argparse
 import logging
 import signal
 import time
@@ -22,6 +23,7 @@ ALERT_LABELS = {
     "YAWN": "BOSTEZO",
     "HEAD_NOD": "CABECEO",
     "PHONE_USE": "USO DE CELULAR",
+    "PHONE_OBJECT": "CELULAR DETECTADO",
 }
 
 SEVERITY_COLORS = {
@@ -139,6 +141,24 @@ def draw_metrics(frame, metrics, config):
             2,
         )
 
+    # Line 4: YOLO phone-object bbox (only when active)
+    if metrics.phone_object_detected and metrics.phone_object_bbox is not None:
+        h, w = frame.shape[:2]
+        x1, y1, x2, y2 = metrics.phone_object_bbox
+        p1 = (int(x1 * w), int(y1 * h))
+        p2 = (int(x2 * w), int(y2 * h))
+        magenta = (255, 0, 255)
+        cv2.rectangle(frame, p1, p2, magenta, 2)
+        cv2.putText(
+            frame,
+            f"PHONE {metrics.phone_object_conf:.2f}",
+            (p1[0], max(12, p1[1] - 6)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            magenta,
+            2,
+        )
+
 
 def draw_alerts(frame, active_alerts):
     """Draw active alert banners at the bottom of the frame."""
@@ -155,10 +175,31 @@ def draw_alerts(frame, active_alerts):
         y -= 35
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="Somnolence Detector edge runtime")
+    parser.add_argument(
+        "--no-display",
+        action="store_true",
+        help="Run headless (no OpenCV window). Required on a Pi without monitor.",
+    )
+    parser.add_argument(
+        "--camera",
+        type=int,
+        default=0,
+        help="cv2.VideoCapture index (default: 0 = /dev/video0)",
+    )
+    return parser.parse_args()
+
+
 def main():
+    args = parse_args()
     config = load_config()
     device_id = get_or_create_device_id()
     logger.info(f"Device ID: {device_id}")
+    logger.info(
+        f"YOLO phone-object detection: "
+        f"{'enabled' if config.get('yolo_enabled') else 'disabled'}"
+    )
 
     engine = DetectionEngine(config)
     sync_manager = SyncManager(device_id, config)
@@ -177,11 +218,20 @@ def main():
 
     sync_manager.start()
 
-    cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture(args.camera)
     active_alerts = []
     last_env_time = 0.0
 
-    logger.info("Somnolence Detector started — press 'q' to quit")
+    # Effective pipeline FPS, reported every ~5s
+    fps_window_frames = 0
+    fps_window_start = time.monotonic()
+    FPS_LOG_INTERVAL_S = 5.0
+
+    mode = "headless" if args.no_display else "display"
+    logger.info(
+        f"Somnolence Detector started in {mode} mode — "
+        f"{'Ctrl+C to quit' if args.no_display else 'press q to quit'}"
+    )
 
     while cap.isOpened() and not shutdown_requested:
         ret, frame = cap.read()
@@ -214,12 +264,28 @@ def main():
         # Purge expired display alerts
         active_alerts = [(e, t) for e, t in active_alerts if t > now_mono]
 
-        draw_metrics(frame, metrics, config)
-        draw_alerts(frame, active_alerts)
+        fps_window_frames += 1
+        elapsed_fps = now_mono - fps_window_start
+        if elapsed_fps >= FPS_LOG_INTERVAL_S:
+            fps = fps_window_frames / elapsed_fps
+            yolo_suffix = (
+                f" yolo_bbox={'yes' if metrics.phone_object_detected else 'no'}"
+                if config.get("yolo_enabled") else ""
+            )
+            logger.info(f"[PIPELINE] fps={fps:.1f}{yolo_suffix}")
+            fps_window_frames = 0
+            fps_window_start = now_mono
 
-        cv2.imshow("Somnolence Detector", frame)
-        if cv2.waitKey(1) & 0xFF == ord("q"):
-            break
+        if args.no_display:
+            # Small sleep to prevent pegging the CPU when there's no UI
+            # waitKey — actual pacing comes from camera capture timing.
+            time.sleep(0.001)
+        else:
+            draw_metrics(frame, metrics, config)
+            draw_alerts(frame, active_alerts)
+            cv2.imshow("Somnolence Detector", frame)
+            if cv2.waitKey(1) & 0xFF == ord("q"):
+                break
 
     # Cleanup
     logger.info("Shutting down...")
@@ -229,7 +295,8 @@ def main():
     sync_manager.stop()
     engine.close()
     cap.release()
-    cv2.destroyAllWindows()
+    if not args.no_display:
+        cv2.destroyAllWindows()
     logger.info("Shutdown complete")
 
 
