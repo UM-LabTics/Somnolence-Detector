@@ -21,6 +21,7 @@ ALERT_LABELS = {
     "EYE_CLOSURE": "SOMNOLENCIA",
     "YAWN": "BOSTEZO",
     "HEAD_NOD": "CABECEO",
+    "PHONE_USE": "USO DE CELULAR",
 }
 
 SEVERITY_COLORS = {
@@ -94,6 +95,49 @@ def draw_metrics(frame, metrics, config):
         pitch_color,
         2,
     )
+
+    # Line 3: Hand-Ear distance (phone use detection)
+    y = 90
+    if metrics.hand_detected:
+        dist_color = (
+            (0, 0, 255)
+            if metrics.hand_ear_distance < config["phone_distance_threshold"]
+            else (0, 255, 0)
+        )
+        cv2.putText(
+            frame,
+            f"Hand-Ear: {metrics.hand_ear_distance:.3f}",
+            (10, y),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            dist_color,
+            2,
+        )
+
+        # Line from closest hand point to closest ear landmark
+        if metrics.closest_hand_xy is not None and metrics.closest_ear_xy is not None:
+            h, w = frame.shape[:2]
+            hp = (
+                int(metrics.closest_hand_xy[0] * w),
+                int(metrics.closest_hand_xy[1] * h),
+            )
+            ep = (
+                int(metrics.closest_ear_xy[0] * w),
+                int(metrics.closest_ear_xy[1] * h),
+            )
+            cv2.line(frame, hp, ep, dist_color, 2)
+            cv2.circle(frame, hp, 5, dist_color, -1)
+            cv2.circle(frame, ep, 5, dist_color, -1)
+    else:
+        cv2.putText(
+            frame,
+            "Hand-Ear: -",
+            (10, y),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            (128, 128, 128),
+            2,
+        )
 
 
 def draw_alerts(frame, active_alerts):

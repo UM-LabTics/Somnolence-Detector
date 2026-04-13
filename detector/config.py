@@ -22,6 +22,12 @@ _DETECTION_DEFAULTS = {
     "refine_landmarks": True,
     "min_detection_confidence": 0.5,
     "min_tracking_confidence": 0.5,
+    # Phone use (hand near ear)
+    "phone_distance_threshold": 0.15,
+    "phone_consec_frames": 30,
+    "phone_sustained_frames": 90,
+    "max_num_hands": 2,
+    "hands_model_complexity": 0,
 }
 
 
