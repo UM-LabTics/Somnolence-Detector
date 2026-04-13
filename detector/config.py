@@ -36,13 +36,15 @@ _DETECTION_DEFAULTS = {
     "yolo_bin_path": str(
         Path(__file__).parent / "models" / "yolo11n_416.ncnn.bin"
     ),
-    "yolo_confidence": 0.50,              # strict threshold for COCO-generic on webcam
+    "yolo_confidence": 0.55,              # strict threshold for COCO-generic on webcam
     "yolo_iou": 0.45,
     "yolo_input_size": 320,               # Pi 5 CPU budget; ~40% less compute than 416
     "yolo_num_threads": 2,                # leaves 2 cores for MediaPipe
     "yolo_stale_max_age_s": 0.5,
-    "yolo_min_box_area": 0.003,           # reject spurious tiny boxes
-    "yolo_max_box_area": 0.60,            # reject absurdly large boxes
+    "yolo_min_box_area": 0.008,           # reject tiny boxes (< 0.8% of frame)
+    "yolo_max_box_area": 0.35,            # reject absurdly large boxes (> 35%)
+    "yolo_min_aspect_ratio": 0.3,         # phones are tall (~0.45) or wide (~2.2)
+    "yolo_max_aspect_ratio": 3.5,         # reject square-ish false positives
     "phone_object_iou_hand_threshold": 0.15,
     "phone_object_dist_ear_threshold": 0.30,
     "phone_object_consec_frames": 10,     # ~1.5s sustained pose

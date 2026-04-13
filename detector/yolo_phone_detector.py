@@ -67,8 +67,13 @@ class YoloPhoneDetector:
         input_size: int = 416,
         num_threads: int = 4,
         target_class_id: int = 67,  # COCO "cell phone"
-        min_box_area: float = 0.003,   # fraction of frame, filter tiny spurious boxes
-        max_box_area: float = 0.6,     # filter absurdly large boxes
+        min_box_area: float = 0.008,   # fraction of frame, filter tiny spurious boxes
+        max_box_area: float = 0.35,    # filter absurdly large boxes
+        # Real phones have an extreme aspect ratio (~0.45 portrait / ~2.2
+        # landscape). Square-ish detections are almost always boxes, books,
+        # faces, or other rectangular false positives.
+        min_aspect_ratio: float = 0.3,
+        max_aspect_ratio: float = 3.5,
     ):
         if ncnn is None:
             raise ImportError("ncnn package is not installed")
@@ -79,16 +84,20 @@ class YoloPhoneDetector:
         self._target_class_id = target_class_id
         self._min_box_area = min_box_area
         self._max_box_area = max_box_area
+        self._min_aspect_ratio = min_aspect_ratio
+        self._max_aspect_ratio = max_aspect_ratio
 
         self._net = ncnn.Net()
         self._net.opt.use_vulkan_compute = False
         self._net.opt.num_threads = num_threads
-        # Cortex-A76 (Pi 5) supports ARMv8.2 FP16 natively. These three flags
-        # roughly halve inference time on compatible models. Safe to enable —
-        # ncnn silently falls back to FP32 on CPUs that don't support FP16.
-        self._net.opt.use_fp16_packed = True
-        self._net.opt.use_fp16_storage = True
-        self._net.opt.use_fp16_arithmetic = True
+        # NOTE: FP16 is disabled. The stock ncnn PyPI wheel is not compiled
+        # with the ARMv8.2-A76 FP16 extensions, so enabling these flags on Pi
+        # 5 produces numerically noisy outputs (bboxes that jump across the
+        # frame, miscalibrated scores) without a consistent speedup. Re-enable
+        # only after rebuilding ncnn from source with -mcpu=cortex-a76.
+        self._net.opt.use_fp16_packed = False
+        self._net.opt.use_fp16_storage = False
+        self._net.opt.use_fp16_arithmetic = False
         self._net.load_param(param_path)
         self._net.load_model(bin_path)
 
@@ -210,8 +219,16 @@ class YoloPhoneDetector:
             # absurdly large ones that almost never correspond to a real phone
             # in a driver's hand). The phone in hand normally covers 1%-30% of
             # the frame at the usage distance.
-            area = (nx2 - nx1) * (ny2 - ny1)
+            bw_n = nx2 - nx1
+            bh_n = ny2 - ny1
+            area = bw_n * bh_n
             if area < self._min_box_area or area > self._max_box_area:
+                continue
+            # Reject boxes whose shape isn't phone-like. A real phone is
+            # either tall (portrait) or wide (landscape) — square detections
+            # are almost always books, boxes, faces, etc.
+            aspect = bw_n / bh_n if bh_n > 0 else 0.0
+            if aspect < self._min_aspect_ratio or aspect > self._max_aspect_ratio:
                 continue
 
             results.append(
@@ -332,8 +349,10 @@ def create_yolo_worker(cfg: dict) -> Optional[YoloWorker]:
             iou=cfg["yolo_iou"],
             input_size=cfg["yolo_input_size"],
             num_threads=cfg["yolo_num_threads"],
-            min_box_area=cfg.get("yolo_min_box_area", 0.003),
-            max_box_area=cfg.get("yolo_max_box_area", 0.6),
+            min_box_area=cfg.get("yolo_min_box_area", 0.008),
+            max_box_area=cfg.get("yolo_max_box_area", 0.35),
+            min_aspect_ratio=cfg.get("yolo_min_aspect_ratio", 0.3),
+            max_aspect_ratio=cfg.get("yolo_max_aspect_ratio", 3.5),
         )
     except Exception as exc:
         logger.warning("Failed to load YOLO model: %s", exc)
