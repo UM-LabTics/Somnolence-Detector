@@ -73,7 +73,8 @@ def load_config() -> dict:
     # YOLO phone object detection
     config["yolo_enabled"] = os.environ.get("YOLO_ENABLED", "true").lower() == "true"
     config["yolo_confidence"] = float(os.environ.get("YOLO_CONFIDENCE", "0.4"))
-    config["yolo_skip_frames"] = int(os.environ.get("YOLO_SKIP_FRAMES", "3"))
+    config["yolo_skip_frames"] = int(os.environ.get("YOLO_SKIP_FRAMES", "4"))
+    config["yolo_imgsz"] = int(os.environ.get("YOLO_IMGSZ", "320"))
 
     # Sensors & Actuators
     config["environmental_interval"] = 30.0

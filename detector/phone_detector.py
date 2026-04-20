@@ -7,6 +7,9 @@ Two-condition strategy:
 Both conditions must be true for a PHONE_USE alert to fire.
 If ultralytics is not installed or the model cannot load, condition 2 is
 skipped and the detector falls back to hand-only behaviour.
+
+Model loading priority: yolov8n_ncnn_model (NCNN) > yolov8n.pt (PyTorch).
+NCNN provides ~3-5x lower latency on CPU/edge hardware.
 """
 
 import logging
@@ -66,21 +69,27 @@ class HandDetector:
         self._hands.close()
 
 
+_NCNN_MODEL_PATH = "yolov8n_ncnn_model"
+_PT_MODEL_PATH = "yolov8n.pt"
+
+
 class PhoneObjectDetector:
     """Detects 'cell phone' objects in a frame using YOLOv8n.
 
     Runs inference every `skip_frames` frames and caches the last result
     to keep CPU usage low on embedded hardware.
 
+    Loads NCNN model if available (faster on CPU/edge), falls back to .pt.
     If ultralytics is unavailable, `available` is False and `detect()`
     always returns True so the hand-distance check is the sole gate.
     """
 
     PHONE_CLASS_ID = 67  # COCO class index for "cell phone"
 
-    def __init__(self, confidence: float = 0.4, skip_frames: int = 3):
+    def __init__(self, confidence: float = 0.4, skip_frames: int = 4, imgsz: int = 320):
         self._confidence = confidence
         self._skip_frames = max(1, skip_frames)
+        self._imgsz = imgsz
         self._frame_count = 0
         self._last_result = False
         self._model = None
@@ -88,11 +97,20 @@ class PhoneObjectDetector:
 
         try:
             from ultralytics import YOLO  # noqa: PLC0415
-            self._model = YOLO("yolov8n.pt")
-            # Suppress ultralytics verbose output after first load
+            import os  # noqa: PLC0415
+
+            if os.path.exists(_NCNN_MODEL_PATH):
+                self._model = YOLO(_NCNN_MODEL_PATH, task="detect")
+                logger.info("PhoneObjectDetector: NCNN model loaded (imgsz=%d)", imgsz)
+            else:
+                self._model = YOLO(_PT_MODEL_PATH)
+                logger.info(
+                    "PhoneObjectDetector: YOLOv8n.pt loaded — "
+                    "run export_ncnn.py to speed up inference (imgsz=%d)", imgsz
+                )
+
             self._model.overrides["verbose"] = False
             self.available = True
-            logger.info("PhoneObjectDetector: YOLOv8n loaded (COCO class 67)")
         except Exception as exc:
             logger.warning(
                 "PhoneObjectDetector: ultralytics unavailable — "
@@ -115,6 +133,7 @@ class PhoneObjectDetector:
             bgr_frame,
             classes=[self.PHONE_CLASS_ID],
             conf=self._confidence,
+            imgsz=self._imgsz,
             verbose=False,
         )
         self._last_result = any(len(r.boxes) > 0 for r in results)

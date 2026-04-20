@@ -131,7 +131,8 @@ class DetectionEngine:
         if cfg.get("yolo_enabled", True):
             self._phone_object_detector = PhoneObjectDetector(
                 confidence=cfg.get("yolo_confidence", 0.4),
-                skip_frames=cfg.get("yolo_skip_frames", 3),
+                skip_frames=cfg.get("yolo_skip_frames", 4),
+                imgsz=cfg.get("yolo_imgsz", 320),
             )
         else:
             self._phone_object_detector = None
