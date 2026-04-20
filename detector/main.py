@@ -1,5 +1,6 @@
 import logging
 import signal
+import sys
 import time
 
 import cv2
@@ -178,7 +179,8 @@ def main():
 
     sync_manager.start()
 
-    cap = cv2.VideoCapture(0, cv2.CAP_AVFOUNDATION)
+    backend = cv2.CAP_AVFOUNDATION if sys.platform == "darwin" else cv2.CAP_V4L2
+    cap = cv2.VideoCapture(0, backend)
     active_alerts = []
     last_env_time = 0.0
 
