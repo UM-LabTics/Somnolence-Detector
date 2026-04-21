@@ -51,7 +51,7 @@ export function HistoryChart({ data, groupBy }: HistoryChartProps) {
           <ComposedChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
             <XAxis dataKey="periodLabel" tick={{ fontSize: 12 }} />
-            <YAxis yAxisId="left" tick={{ fontSize: 12 }} />
+            <YAxis yAxisId="left" tick={{ fontSize: 12 }} tickFormatter={(v) => Number(v).toFixed(1)} />
             <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12 }} />
             <Tooltip
               contentStyle={{
@@ -59,6 +59,11 @@ export function HistoryChart({ data, groupBy }: HistoryChartProps) {
                 border: "1px solid var(--border)",
                 color: "var(--card-foreground)",
                 borderRadius: "var(--radius)",
+              }}
+              formatter={(value: number, name: string) => {
+                if (name === "Alertas") return [value, name];
+                if (name === "CO₂ (ppm)") return [Math.round(value), name];
+                return [Number(value).toFixed(1), name];
               }}
             />
             <Legend />
