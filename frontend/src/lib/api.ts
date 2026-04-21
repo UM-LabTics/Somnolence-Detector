@@ -1,5 +1,6 @@
 import type {
   AlertNotificationResponse,
+  AlertResponse,
   DashboardSummary,
   DeviceResponse,
   HistoryResponse,
@@ -77,6 +78,27 @@ export async function getNotifications(params?: {
   return fetchApi<AlertNotificationResponse[]>(
     `/api/notifications/${query}`
   );
+}
+
+export async function getAlerts(params: {
+  device_id?: string;
+  alert_type?: string;
+  severity?: string;
+  start_date?: string;
+  end_date?: string;
+  skip?: number;
+  limit?: number;
+}): Promise<AlertResponse[]> {
+  const query = buildParams({
+    device_id: params.device_id,
+    alert_type: params.alert_type,
+    severity: params.severity,
+    start_date: params.start_date ? `${params.start_date}T00:00:00` : undefined,
+    end_date: params.end_date ? `${params.end_date}T23:59:59` : undefined,
+    skip: params.skip?.toString(),
+    limit: params.limit?.toString(),
+  });
+  return fetchApi<AlertResponse[]>(`/api/alerts/${query}`);
 }
 
 export async function acknowledgeNotification(
