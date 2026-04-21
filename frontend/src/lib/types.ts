@@ -73,3 +73,15 @@ export interface AlertNotificationResponse {
   created_at: string;
   acknowledged: boolean;
 }
+
+export interface AlertResponse {
+  id: string;
+  device_id: string;
+  alert_type: AlertType;
+  severity: Severity;
+  value: number;
+  threshold: number;
+  timestamp: string;
+  synced_at: string | null;
+  metadata: Record<string, unknown> | null;
+}
