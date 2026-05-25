@@ -5,11 +5,16 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.deps import get_current_user
 from app.database import get_db
 from app.schemas.environmental import EnvironmentalReadingCreate, EnvironmentalReadingResponse
 from app.services import environmental_service
 
-router = APIRouter(prefix="/environmental", tags=["environmental"])
+router = APIRouter(
+    prefix="/environmental",
+    tags=["environmental"],
+    dependencies=[Depends(get_current_user)],
+)
 
 
 @router.post("/", response_model=EnvironmentalReadingResponse, status_code=201)
