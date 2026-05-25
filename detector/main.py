@@ -1,8 +1,11 @@
 import logging
+import os
 import signal
 import time
 
 import cv2
+
+HEADLESS = os.environ.get("HEADLESS", "false").lower() == "true"
 
 from actuators import create_actuator
 from config import get_or_create_device_id, load_config
@@ -214,12 +217,12 @@ def main():
         # Purge expired display alerts
         active_alerts = [(e, t) for e, t in active_alerts if t > now_mono]
 
-        draw_metrics(frame, metrics, config)
-        draw_alerts(frame, active_alerts)
-
-        cv2.imshow("Somnolence Detector", frame)
-        if cv2.waitKey(1) & 0xFF == ord("q"):
-            break
+        if not HEADLESS:
+            draw_metrics(frame, metrics, config)
+            draw_alerts(frame, active_alerts)
+            cv2.imshow("Somnolence Detector", frame)
+            if cv2.waitKey(1) & 0xFF == ord("q"):
+                break
 
     # Cleanup
     logger.info("Shutting down...")
@@ -229,7 +232,8 @@ def main():
     sync_manager.stop()
     engine.close()
     cap.release()
-    cv2.destroyAllWindows()
+    if not HEADLESS:
+        cv2.destroyAllWindows()
     logger.info("Shutdown complete")
 
 
