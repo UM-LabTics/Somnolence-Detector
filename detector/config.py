@@ -75,4 +75,10 @@ def load_config() -> dict:
     config["mock_sensors"] = os.environ.get("MOCK_SENSORS", "true").lower() == "true"
     config["mock_actuators"] = os.environ.get("MOCK_ACTUATORS", "true").lower() == "true"
 
+    # Hardware pins (BCM numbering)
+    config["dht11_pin"] = int(os.environ.get("DHT11_PIN", "4"))
+    config["buzzer_pin"] = int(os.environ.get("BUZZER_PIN", "17"))
+    led_pin = os.environ.get("LED_PIN", "")  # empty = LED not wired yet
+    config["led_pin"] = int(led_pin) if led_pin else None
+
     return config
