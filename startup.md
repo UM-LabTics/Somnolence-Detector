@@ -34,10 +34,31 @@ ipconfig getifaddr en0
 
 Anotala (ej: `192.168.50.93`). Si estas en WiFi, puede ser `en1` o `en0` segun tu Mac.
 
-### 2. Levantar todos los servicios
+### 2. Configurar variables de entorno (primera vez)
+
+El backend usa una clave JWT para firmar los tokens de login. Esa clave (y el resto de secrets de Docker) viven en un archivo `.env` en la raiz del proyecto que **no se commitea** (esta en `.gitignore`).
+
+Si todavia no existe, copia la plantilla y completa los valores:
 
 ```bash
 cd ~/UM/ProyectoTIC2/Somnolence-Detector
+cp .env.example .env
+# Generar una clave aleatoria larga:
+python3 -c "import secrets; print(secrets.token_urlsafe(64))"
+# Pegar el resultado en JWT_SECRET_KEY dentro de .env
+```
+
+Variables disponibles:
+
+| Variable | Default | Descripcion |
+|---|---|---|
+| `JWT_SECRET_KEY` | (requerido) | Clave para firmar tokens JWT |
+| `JWT_ALGORITHM` | `HS256` | Algoritmo de firma |
+| `JWT_EXPIRATION_MINUTES` | `60` | Vida util del token |
+
+### 3. Levantar todos los servicios
+
+```bash
 docker compose up -d
 ```
 
@@ -50,7 +71,7 @@ Esto arranca 4 contenedores:
 | `postgres` | 5433→5432 | Base de datos PostgreSQL |
 | `mosquitto` | 1883, 9001 | Broker MQTT |
 
-### 3. Verificar que todo arranco
+### 4. Verificar que todo arranco
 
 ```bash
 docker compose ps
@@ -64,13 +85,31 @@ curl http://localhost:8000/health
 # → {"status":"ok"}
 ```
 
-Abrir dashboard:
-- [http://localhost:3000](http://localhost:3000) — Dashboard
+### 5. Crear el usuario admin (solo la primera vez)
+
+Sin un usuario admin no se puede entrar al dashboard. Correr el seed:
+
+```bash
+docker compose exec backend python -m scripts.create_admin
+```
+
+Credenciales por defecto (cambiar en produccion):
+
+- Email: `admin@somnolence.com`
+- Password: `admin123`
+
+El script es idempotente: si el usuario ya existe no hace nada. Para crear admins adicionales o usuarios normales, usar la pantalla `/admin/users` (ver seccion **Autenticacion** abajo).
+
+### 6. Abrir el dashboard
+
+- [http://localhost:3000](http://localhost:3000) — Dashboard (redirige a /login si no hay token)
+- [http://localhost:3000/login](http://localhost:3000/login) — Pantalla de login
 - [http://localhost:3000/history](http://localhost:3000/history) — Vista historica
 - [http://localhost:3000/devices](http://localhost:3000/devices) — Dispositivos
+- [http://localhost:3000/admin/users](http://localhost:3000/admin/users) — Gestion de usuarios (solo admin)
 - [http://localhost:8000/docs](http://localhost:8000/docs) — Swagger UI de la API
 
-### 4. Ver logs en vivo (opcional)
+### 7. Ver logs en vivo (opcional)
 
 ```bash
 docker compose logs -f backend       # API logs
@@ -214,6 +253,60 @@ docker compose down -v
 
 ---
 
+## Autenticacion
+
+El sistema usa **JWT** (Bearer tokens) para todas las APIs `/api/*` excepto `/health` y `/api/auth/login`. La pantalla inicial del frontend es `/login`; sin token valido se redirige automaticamente alli.
+
+### Login via API
+
+```bash
+curl -X POST http://localhost:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@somnolence.com","password":"admin123"}'
+```
+
+Devuelve `access_token` (vida util por defecto: 60 min). Usarlo en cualquier llamada protegida:
+
+```bash
+curl -H "Authorization: Bearer <token>" http://localhost:8000/api/devices/
+```
+
+### Crear nuevos usuarios
+
+Desde el frontend, loguearse como admin y entrar a [http://localhost:3000/admin/users](http://localhost:3000/admin/users). El form pide nombre, email, contraseña (min. 6 chars) y rol (`ADMIN` u `OPERATOR`).
+
+Tambien se puede hacer via API (solo admin):
+
+```bash
+curl -X POST http://localhost:8000/api/auth/users \
+  -H "Authorization: Bearer <admin-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"jose@example.com","password":"secret123","full_name":"Jose","role":"OPERATOR"}'
+```
+
+### Roles
+
+- `ADMIN`: acceso total + gestion de usuarios.
+- `OPERATOR`: acceso al dashboard / dispositivos / historial. No ve la pantalla `/admin/users`.
+
+### Donde se configura la clave JWT
+
+El backend lee `JWT_SECRET_KEY`, `JWT_ALGORITHM` y `JWT_EXPIRATION_MINUTES` desde variables de entorno. En Docker estas vienen del `.env` de la raiz (ver paso 2 arriba). Si cambias `JWT_SECRET_KEY` y reinicias, todos los tokens emitidos previamente quedan invalidos y los usuarios deben volver a loguearse.
+
+### Migraciones de DB (Alembic)
+
+El proyecto incluye Alembic para versionar el esquema. Comandos utiles dentro del contenedor:
+
+```bash
+docker compose exec backend alembic current     # revision actual
+docker compose exec backend alembic history     # historial
+docker compose exec backend alembic upgrade head
+```
+
+> Nota: `Base.metadata.create_all()` sigue corriendo al arrancar el backend e inicializa la DB. Alembic queda disponible para aplicar cambios futuros al esquema.
+
+---
+
 ## Troubleshooting
 
 ### La Pi no se conecta al broker MQTT
@@ -257,6 +350,23 @@ Errores comunes:
 - PostgreSQL no esta healthy — esperar 10s y reintentar `docker compose up -d`
 - Puerto 8000 ocupado — `lsof -i :8000` y matar el proceso
 
+### 401 Unauthorized en las APIs
+
+**Causas comunes:**
+- El token expiro (60 min por defecto) → volver a loguear.
+- Falta el header `Authorization: Bearer <token>` (en el frontend lo maneja `src/lib/api.ts` automaticamente).
+- Se cambio `JWT_SECRET_KEY` en `.env` y se reinicio el backend → todos los tokens viejos quedaron invalidos.
+
+### "No se puede entrar al dashboard, redirige a /login"
+
+- Verificar que el seed del admin se haya corrido: `docker compose exec backend python -m scripts.create_admin`
+- Credenciales por defecto: `admin@somnolence.com` / `admin123`
+- Si olvidaste la contraseña, podes recrear el admin desde la DB:
+  ```bash
+  docker compose exec postgres psql -U postgres -d somnolence -c "DELETE FROM users WHERE email='admin@somnolence.com';"
+  docker compose exec backend python -m scripts.create_admin
+  ```
+
 ### El dashboard del frontend no se actualiza
 
 - Hard refresh en el navegador: `Cmd+Shift+R`
@@ -287,4 +397,11 @@ Genera un device ficticio y publica alertas aleatorias (incluye `PHONE_USE`). Ut
 | `detector/config.py` | Umbrales y configuracion del detector |
 | `scripts/mqtt_simulator.py` | Simulador para testing sin Pi |
 | `mosquitto/config/mosquitto.conf` | Config del broker MQTT |
-| `.env` (opcional) | Variables de entorno para Docker |
+| `.env` | Variables de entorno para Docker (JWT, no commitear) |
+| `.env.example` | Plantilla de `.env` |
+| `backend/scripts/create_admin.py` | Seed del usuario admin inicial |
+| `backend/alembic/` | Migraciones de la base de datos |
+| `backend/app/core/security.py` | Hashing de contraseñas y JWT |
+| `backend/app/routers/auth.py` | Endpoints de login y gestion de usuarios |
+| `frontend/src/proxy.ts` | Redirige rutas no autenticadas a `/login` |
+| `frontend/src/lib/auth-context.tsx` | Contexto React con usuario / login / logout |

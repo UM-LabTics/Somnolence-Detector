@@ -2,8 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNow } from "@/hooks/use-now";
+import { useAuth } from "@/lib/auth-context";
+import { Button } from "@/components/ui/button";
 
 const NAV_ITEMS = [
   { href: "/", label: "Overview", code: "01" },
@@ -15,6 +18,9 @@ export function Header() {
   const pathname = usePathname();
   const nowMs = useNow(1000);
   const now = nowMs ? new Date(nowMs) : null;
+  const { user, status, logout } = useAuth();
+
+  if (pathname === "/login") return null;
 
   const utc = now ? now.toISOString().slice(11, 19) : "--:--:--";
   const local = now
@@ -25,6 +31,11 @@ export function Header() {
         hour12: false,
       })
     : "--:--:--";
+
+  const isAdmin = user?.role === "ADMIN";
+  const navItems = isAdmin
+    ? [...NAV_ITEMS, { href: "/admin/users", label: "Usuarios", code: "04" }]
+    : NAV_ITEMS;
 
   return (
     <header className="relative z-10 border-b border-border bg-background/75 backdrop-blur-md">
@@ -44,7 +55,7 @@ export function Header() {
         </div>
 
         <nav className="flex items-center gap-1">
-          {NAV_ITEMS.map(({ href, label, code }) => {
+          {navItems.map(({ href, label, code }) => {
             const active = pathname === href;
             return (
               <Link
@@ -84,6 +95,24 @@ export function Header() {
             <span className="mono-label text-[0.55rem]">Local</span>
             <span className="text-foreground">{local}</span>
           </div>
+          {status === "authenticated" && user && (
+            <div className="flex items-center gap-3 border-l border-border pl-6">
+              <div className="hidden lg:flex flex-col items-end leading-tight">
+                <span className="mono-label text-[0.55rem]">{user.role}</span>
+                <span className="text-foreground">{user.full_name}</span>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                onClick={logout}
+                aria-label="Cerrar sesión"
+                title="Cerrar sesión"
+              >
+                <LogOut />
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     </header>
