@@ -4,6 +4,7 @@ import logging
 import os
 import ssl
 import time
+import uuid
 
 import paho.mqtt.client as mqtt
 
@@ -89,9 +90,17 @@ def _on_message(client, userdata, message):
 
 def create_mqtt_client(loop: asyncio.AbstractEventLoop) -> mqtt.Client:
     """Create and configure the MQTT client."""
+    # clientId único por proceso. AWS IoT permite una sola conexión por clientId
+    # y kickea las duplicadas: durante un rolling deploy de ECS la tarea vieja y
+    # la nueva conviven, y si comparten clientId se desconectan entre sí en loop.
+    # El sufijo aleatorio evita la colisión. Requiere que la IoT Policy permita
+    # client/somnolence-backend-*.
+    client_id = os.getenv("MQTT_CLIENT_ID", f"somnolence-backend-{uuid.uuid4().hex[:8]}")
+    logger.info(f"MQTT client_id: {client_id}")
+
     client = mqtt.Client(
         callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
-        client_id="somnolence-backend",
+        client_id=client_id,
         userdata={"loop": loop},
     )
 

@@ -63,6 +63,11 @@ def load_config() -> dict:
     config["mqtt_broker"] = os.environ.get("MQTT_BROKER", "localhost")
     config["mqtt_port"] = int(os.environ.get("MQTT_PORT", "1883"))
     config["mqtt_prefix"] = os.environ.get("MQTT_TOPIC_PREFIX", "somnolence")
+    # TLS opcional para AWS IoT Core. Vacíos en local = Mosquitto sin TLS.
+    config["mqtt_client_id"] = os.environ.get("MQTT_CLIENT_ID") or None
+    config["mqtt_ca_cert"] = os.environ.get("MQTT_CA_CERT") or None
+    config["mqtt_client_cert"] = os.environ.get("MQTT_CLIENT_CERT") or None
+    config["mqtt_client_key"] = os.environ.get("MQTT_CLIENT_KEY") or None
 
     # Sync
     config["retry_interval"] = 5.0

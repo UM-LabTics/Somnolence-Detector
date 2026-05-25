@@ -2,8 +2,10 @@
 
 import json
 import logging
+import ssl
 import threading
 import time
+from typing import Optional
 
 import paho.mqtt.client as mqtt
 
@@ -19,6 +21,10 @@ class MQTTPublisher:
         port: int,
         device_id: str,
         prefix: str = "somnolence",
+        client_id: Optional[str] = None,
+        ca_cert: Optional[str] = None,
+        client_cert: Optional[str] = None,
+        client_key: Optional[str] = None,
     ):
         self._broker = broker
         self._port = port
@@ -28,10 +34,22 @@ class MQTTPublisher:
 
         self._client = mqtt.Client(
             callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
+            client_id=client_id,
         )
         self._client.on_connect = self._on_connect
         self._client.on_disconnect = self._on_disconnect
         self._client.reconnect_delay_set(min_delay=1, max_delay=60)
+
+        if ca_cert and client_cert and client_key:
+            self._client.tls_set(
+                ca_certs=ca_cert,
+                certfile=client_cert,
+                keyfile=client_key,
+                tls_version=ssl.PROTOCOL_TLSv1_2,
+            )
+            logger.info(f"MQTT TLS habilitado (clientId={client_id})")
+        else:
+            logger.info("MQTT sin TLS (modo local)")
 
         # Last Will: mark device offline on unexpected disconnect
         status_topic = f"{prefix}/{device_id}/status"
