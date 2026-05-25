@@ -1,6 +1,8 @@
 import asyncio
 import json
 import logging
+import os
+import ssl
 import time
 
 import paho.mqtt.client as mqtt
@@ -89,8 +91,27 @@ def create_mqtt_client(loop: asyncio.AbstractEventLoop) -> mqtt.Client:
     """Create and configure the MQTT client."""
     client = mqtt.Client(
         callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
+        client_id="somnolence-backend",
         userdata={"loop": loop},
     )
+
+    # --- TLS para AWS IoT Core ---
+    # Si las rutas de los certificados estan definidas, activar TLS.
+    # En local (Mosquitto) estas variables no existen y se conecta sin TLS.
+    ca = os.getenv("MQTT_CA_CERT")
+    cert = os.getenv("MQTT_CLIENT_CERT")
+    key = os.getenv("MQTT_CLIENT_KEY")
+    if ca and cert and key:
+        client.tls_set(
+            ca_certs=ca,
+            certfile=cert,
+            keyfile=key,
+            tls_version=ssl.PROTOCOL_TLSv1_2,
+        )
+        logger.info("MQTT TLS habilitado (AWS IoT Core)")
+    else:
+        logger.info("MQTT sin TLS (modo local)")
+    # --- fin TLS ---
 
     client.on_connect = _on_connect
     client.on_disconnect = _on_disconnect

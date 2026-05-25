@@ -30,3 +30,11 @@ Thumbs.db
 
 # Docker
 *.log
+
+*.pem
+*.key
+*.crt
+**/certs/
+
+# Docs (insumos internos, no versionar)
+docs/resumen-tecnico.md
