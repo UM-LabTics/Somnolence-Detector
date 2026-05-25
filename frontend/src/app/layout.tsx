@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, IBM_Plex_Mono, Instrument_Serif } from "next/font/google";
 import "./globals.css";
 import { Header } from "@/components/header";
+import { AuthProvider } from "@/lib/auth-context";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -41,8 +42,10 @@ export default function RootLayout({
           aria-hidden
           className="pointer-events-none fixed inset-0 grid-bg opacity-70"
         />
-        <Header />
-        <main className="relative flex-1">{children}</main>
+        <AuthProvider>
+          <Header />
+          <main className="relative flex-1">{children}</main>
+        </AuthProvider>
       </body>
     </html>
   );

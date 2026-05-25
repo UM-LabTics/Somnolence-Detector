@@ -3,11 +3,14 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.deps import get_current_user
 from app.database import get_db
 from app.schemas.device import DeviceCreate, DeviceResponse, DeviceUpdate
 from app.services import device_service
 
-router = APIRouter(prefix="/devices", tags=["devices"])
+router = APIRouter(
+    prefix="/devices", tags=["devices"], dependencies=[Depends(get_current_user)]
+)
 
 
 @router.post("/", response_model=DeviceResponse, status_code=201)

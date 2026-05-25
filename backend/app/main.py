@@ -10,7 +10,7 @@ from app.database import init_db
 # Import models to register them with Base.metadata
 import app.models  # noqa: F401
 from app.mqtt import start_mqtt, stop_mqtt
-from app.routers import alerts, dashboard, devices, environmental, notifications
+from app.routers import alerts, auth, dashboard, devices, environmental, notifications
 
 
 @asynccontextmanager
@@ -36,6 +36,7 @@ app.add_middleware(
 )
 
 
+app.include_router(auth.router, prefix="/api")
 app.include_router(devices.router, prefix="/api")
 app.include_router(alerts.router, prefix="/api")
 app.include_router(environmental.router, prefix="/api")
