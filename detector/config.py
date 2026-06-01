@@ -74,6 +74,10 @@ def load_config() -> dict:
     config["mqtt_client_cert"] = os.environ.get("MQTT_CLIENT_CERT") or None
     config["mqtt_client_key"] = os.environ.get("MQTT_CLIENT_KEY") or None
 
+    # ALPN protocol for MQTT over 443 (set to "x-amzn-mqtt-ca" for AWS IoT
+    # Core on networks that block port 8883). Unset -> standard 8883 path.
+    config["mqtt_alpn"] = os.environ.get("MQTT_ALPN") or None
+
     # Sync
     config["retry_interval"] = 5.0
     config["heartbeat_interval"] = 30.0
