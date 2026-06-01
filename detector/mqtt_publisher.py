@@ -19,6 +19,10 @@ class MQTTPublisher:
         port: int,
         device_id: str,
         prefix: str = "somnolence",
+        client_id: str | None = None,
+        ca_cert: str | None = None,
+        client_cert: str | None = None,
+        client_key: str | None = None,
     ):
         self._broker = broker
         self._port = port
@@ -28,10 +32,22 @@ class MQTTPublisher:
 
         self._client = mqtt.Client(
             callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
+            client_id=client_id or "",
         )
         self._client.on_connect = self._on_connect
         self._client.on_disconnect = self._on_disconnect
         self._client.reconnect_delay_set(min_delay=1, max_delay=60)
+
+        # Mutual TLS for AWS IoT Core (port 8883). Enabled only when a CA is
+        # provided; otherwise we keep the plain local-Mosquitto path. Same
+        # pattern as the backend MQTT client.
+        if ca_cert:
+            self._client.tls_set(
+                ca_certs=ca_cert,
+                certfile=client_cert,
+                keyfile=client_key,
+            )
+            logger.info("MQTT TLS enabled (mutual auth)")
 
         # Last Will: mark device offline on unexpected disconnect
         status_topic = f"{prefix}/{device_id}/status"

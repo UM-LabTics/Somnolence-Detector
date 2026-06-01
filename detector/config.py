@@ -64,6 +64,16 @@ def load_config() -> dict:
     config["mqtt_port"] = int(os.environ.get("MQTT_PORT", "1883"))
     config["mqtt_prefix"] = os.environ.get("MQTT_TOPIC_PREFIX", "somnolence")
 
+    # MQTT client identity (AWS IoT Core requires it to match the Thing).
+    # Empty/unset -> paho generates a random id (fine for local Mosquitto).
+    config["mqtt_client_id"] = os.environ.get("MQTT_CLIENT_ID") or None
+
+    # MQTT TLS (mutual auth). Same env var names as the backend client.
+    # Set all three to publish to IoT Core over 8883; unset -> plain local mode.
+    config["mqtt_ca_cert"] = os.environ.get("MQTT_CA_CERT") or None
+    config["mqtt_client_cert"] = os.environ.get("MQTT_CLIENT_CERT") or None
+    config["mqtt_client_key"] = os.environ.get("MQTT_CLIENT_KEY") or None
+
     # Sync
     config["retry_interval"] = 5.0
     config["heartbeat_interval"] = 30.0
