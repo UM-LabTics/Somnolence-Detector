@@ -44,6 +44,7 @@ class SyncManager:
             ca_cert=config.get("mqtt_ca_cert"),
             client_cert=config.get("mqtt_client_cert"),
             client_key=config.get("mqtt_client_key"),
+            alpn=config.get("mqtt_alpn"),
         )
 
         self._stop_event = threading.Event()
