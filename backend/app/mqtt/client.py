@@ -2,8 +2,8 @@ import asyncio
 import json
 import logging
 import os
-import ssl
 import time
+import uuid
 
 import paho.mqtt.client as mqtt
 
@@ -20,7 +20,7 @@ TOPIC_STATUS = f"{settings.MQTT_TOPIC_PREFIX}/+/status"
 
 def _on_connect(client, userdata, connect_flags, reason_code, properties):
     """Called on (re)connect. Subscribe to all topics."""
-    logger.info(f"MQTT connected: {reason_code}")
+    logger.warning("MQTT connected: %s", reason_code)
     client.subscribe(
         [
             (TOPIC_ALERTS, 1),
@@ -28,14 +28,12 @@ def _on_connect(client, userdata, connect_flags, reason_code, properties):
             (TOPIC_STATUS, 1),
         ]
     )
-    logger.info(
-        f"MQTT subscribed to: {TOPIC_ALERTS}, {TOPIC_ENVIRONMENTAL}, {TOPIC_STATUS}"
-    )
+    logger.warning("MQTT subscribed to: %s, %s, %s", TOPIC_ALERTS, TOPIC_ENVIRONMENTAL, TOPIC_STATUS)
 
 
 def _on_disconnect(client, userdata, disconnect_flags, reason_code, properties):
     """Called on disconnect. Paho auto-reconnects via reconnect_delay_set."""
-    logger.warning(f"MQTT disconnected: {reason_code}")
+    logger.warning("MQTT disconnected: %s (code=%r flags=%r)", reason_code, reason_code, disconnect_flags)
 
 
 def _log_handler_exception(future):
@@ -89,9 +87,11 @@ def _on_message(client, userdata, message):
 
 def create_mqtt_client(loop: asyncio.AbstractEventLoop) -> mqtt.Client:
     """Create and configure the MQTT client."""
+    unique_id = f"somnolence-backend-{uuid.uuid4().hex[:8]}"
+    logger.warning("MQTT client_id: %s", unique_id)
     client = mqtt.Client(
         callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
-        client_id="somnolence-backend",
+        client_id=unique_id,
         userdata={"loop": loop},
     )
 
@@ -102,15 +102,10 @@ def create_mqtt_client(loop: asyncio.AbstractEventLoop) -> mqtt.Client:
     cert = os.getenv("MQTT_CLIENT_CERT")
     key = os.getenv("MQTT_CLIENT_KEY")
     if ca and cert and key:
-        client.tls_set(
-            ca_certs=ca,
-            certfile=cert,
-            keyfile=key,
-            tls_version=ssl.PROTOCOL_TLSv1_2,
-        )
-        logger.info("MQTT TLS habilitado (AWS IoT Core)")
+        client.tls_set(ca_certs=ca, certfile=cert, keyfile=key)
+        logger.warning("MQTT TLS habilitado (AWS IoT Core) ca=%s cert=%s key=%s", ca, cert, key)
     else:
-        logger.info("MQTT sin TLS (modo local)")
+        logger.warning("MQTT sin TLS (modo local)")
     # --- fin TLS ---
 
     client.on_connect = _on_connect
@@ -130,9 +125,7 @@ def start_mqtt(loop: asyncio.AbstractEventLoop) -> mqtt.Client:
     for attempt in range(5):
         try:
             client.connect(settings.MQTT_BROKER, settings.MQTT_PORT)
-            logger.info(
-                f"MQTT connecting to {settings.MQTT_BROKER}:{settings.MQTT_PORT}"
-            )
+            logger.warning("MQTT connecting to %s:%s", settings.MQTT_BROKER, settings.MQTT_PORT)
             break
         except (ConnectionRefusedError, OSError) as e:
             if attempt < 4:
