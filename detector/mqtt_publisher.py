@@ -2,6 +2,7 @@
 
 import json
 import logging
+import ssl
 import threading
 import time
 
@@ -23,6 +24,7 @@ class MQTTPublisher:
         ca_cert: str | None = None,
         client_cert: str | None = None,
         client_key: str | None = None,
+        alpn: str | None = None,
     ):
         self._broker = broker
         self._port = port
@@ -38,16 +40,24 @@ class MQTTPublisher:
         self._client.on_disconnect = self._on_disconnect
         self._client.reconnect_delay_set(min_delay=1, max_delay=60)
 
-        # Mutual TLS for AWS IoT Core (port 8883). Enabled only when a CA is
-        # provided; otherwise we keep the plain local-Mosquitto path. Same
-        # pattern as the backend MQTT client.
+        # Mutual TLS for AWS IoT Core. Enabled only when a CA is provided;
+        # otherwise we keep the plain local-Mosquitto path.
+        # When `alpn` is set (e.g. "x-amzn-mqtt-ca"), connect with ALPN over
+        # port 443 instead of 8883 — needed on networks that block 8883.
         if ca_cert:
-            self._client.tls_set(
-                ca_certs=ca_cert,
-                certfile=client_cert,
-                keyfile=client_key,
-            )
-            logger.info("MQTT TLS enabled (mutual auth)")
+            if alpn:
+                ctx = ssl.create_default_context(cafile=ca_cert)
+                ctx.load_cert_chain(certfile=client_cert, keyfile=client_key)
+                ctx.set_alpn_protocols([alpn])
+                self._client.tls_set_context(ctx)
+                logger.info(f"MQTT TLS enabled (mutual auth, ALPN={alpn})")
+            else:
+                self._client.tls_set(
+                    ca_certs=ca_cert,
+                    certfile=client_cert,
+                    keyfile=client_key,
+                )
+                logger.info("MQTT TLS enabled (mutual auth)")
 
         # Last Will: mark device offline on unexpected disconnect
         status_topic = f"{prefix}/{device_id}/status"

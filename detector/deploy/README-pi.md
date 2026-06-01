@@ -113,8 +113,9 @@ Si las tres pasan, el sistema está completo.
 
 | Síntoma | Causa probable |
 |---------|----------------|
+| `[Errno 101] Network is unreachable` / timeout al conectar | La red bloquea el puerto **8883**. Usá `MQTT_PORT=443` + `MQTT_ALPN=x-amzn-mqtt-ca` (caso de la wifi de la facultad) |
 | `MQTT connection failed` y nunca conecta | Política de IoT no permite el `client_id`/topic, o el cert no está adjunto al Thing |
-| TLS handshake error | Rutas de `MQTT_TLS_*` mal, o permisos de la `.key` |
+| TLS handshake error | Rutas de `MQTT_CA_CERT`/`MQTT_CLIENT_CERT`/`MQTT_CLIENT_KEY` mal, o permisos de la `.key` |
 | Conecta pero se desconecta al toque | Otro cliente usando el **mismo** `client_id` (IoT Core expulsa duplicados) |
 | `cannot open display` bajo systemd | Falta `HEADLESS=true` en `/etc/somnolence.env` |
 | No abre la cámara | `cv2.VideoCapture(0)` sin permisos/cámara; revisá `/dev/video0` |
