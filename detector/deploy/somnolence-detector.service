@@ -1,0 +1,29 @@
+# systemd unit para el detector de somnolencia en la Raspberry Pi.
+#
+# Instalación:
+#   sudo cp somnolence-detector.service /etc/systemd/system/
+#   sudo cp somnolence.env.example /etc/somnolence.env   # y editar valores reales
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now somnolence-detector
+#
+# Ver logs:   journalctl -u somnolence-detector -f
+#
+# Ajustá User y WorkingDirectory si no clonaste en /home/pi/somnolence.
+
+[Unit]
+Description=Somnolence Detector (publica alertas a AWS IoT Core)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/somnolence/detector
+EnvironmentFile=/etc/somnolence.env
+# Usa el venv del proyecto. Ajustá la ruta si tu venv vive en otro lado.
+ExecStart=/home/pi/somnolence/detector/.venv/bin/python main.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
