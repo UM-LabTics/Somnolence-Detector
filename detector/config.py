@@ -84,6 +84,11 @@ def load_config() -> dict:
     config["batch_size"] = 50
     config["db_path"] = str(Path(__file__).parent / "somnolence_local.db")
 
+    # Camera. On a Raspberry Pi 5 the libcamera/ISP pipeline exposes many
+    # /dev/videoN nodes besides the USB webcam, so index 0 is often wrong.
+    # Use `v4l2-ctl --list-devices` to find the webcam's real index.
+    config["camera_index"] = int(os.environ.get("CAMERA_INDEX", "0"))
+
     # Sensors & Actuators
     config["environmental_interval"] = 30.0
     config["mock_sensors"] = os.environ.get("MOCK_SENSORS", "true").lower() == "true"
