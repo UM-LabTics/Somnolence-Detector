@@ -180,7 +180,14 @@ def main():
 
     sync_manager.start()
 
-    cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture(config["camera_index"])
+    if not cap.isOpened():
+        logger.error(
+            "Could not open camera at index %s. On a Raspberry Pi run "
+            "`v4l2-ctl --list-devices` to find the USB webcam's index and set "
+            "CAMERA_INDEX accordingly.",
+            config["camera_index"],
+        )
     active_alerts = []
     last_env_time = 0.0
 

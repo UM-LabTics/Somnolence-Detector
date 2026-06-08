@@ -11,6 +11,45 @@ cuando definís las variables `MQTT_TLS_*`. Sin ellas, sigue funcionando local.
 
 ---
 
+## 0. ¿Es una Pi nueva? Crear su Thing y certificado en IoT Core
+
+> Saltear este paso si ya tenés los 3 archivos de certificado para esta Pi
+> (ej. los de `somnolence-pi-team06` ya existen y están en `certs/pi/`).
+
+Cada Raspberry Pi necesita su **propia identidad** en AWS IoT Core — no se puede
+reusar el Thing/certificado de otra. La autenticación es por **mutual TLS con
+certificados X.509** (el equivalente de IoT a un "token de dispositivo", pero
+más fuerte: cada Pi tiene su propio par certificado+clave privada que no se
+puede falsificar ni interceptar).
+
+En la consola de AWS → **IoT Core → Manage → Things**:
+
+1. **Create thing** → nombrarlo de forma única, ej. `somnolence-pi-team07`
+   (este nombre va a ser también el `MQTT_CLIENT_ID` más adelante)
+2. **Auto-generate a new certificate** → descargar los 3 archivos:
+   - *Device certificate* (`xxxxx-certificate.pem.crt`)
+   - *Private key* (`xxxxx-private.pem.key`)
+   - *Amazon Root CA 1* (`AmazonRootCA1.pem` — es la misma para todas las Pis,
+     ya está en `certs/pi/AmazonRootCA1.pem`)
+
+   > 🔒 **La private key SOLO se puede descargar en este momento.** Si se
+   > pierde, no hay forma de recuperarla — hay que generar un certificado
+   > nuevo y volver a adjuntarlo al Thing.
+3. **Adjuntar una policy** al certificado — reusar la policy existente que
+   permite publicar/suscribirse a `somnolence/*` (la misma que usa
+   `somnolence-pi-team06`). No hace falta crear una nueva por cada Pi.
+4. **Activar** el certificado y **adjuntarlo al Thing** (el wizard de "Create
+   thing" lo hace todo en un solo flujo si elegís "Auto-generate certificate").
+
+Guardá los 3 archivos descargados en `certs/<nombre-de-la-pi>/` en el repo
+local (en tu Mac) — **nunca se commitean**, ya están en `.gitignore`.
+
+> ✅ **No hace falta "dar de alta" el dispositivo en el dashboard a mano.** El
+> backend lo auto-registra apenas llega su primer mensaje MQTT (aparece solo
+> en `/devices`).
+
+---
+
 ## 1. Copiar los certificados a la Pi
 
 Los 3 archivos que tenés en tu Mac (en `certs/pi/` o donde los hayas descargado):
@@ -61,8 +100,8 @@ Verificá que apunten a IoT Core y a los certificados copiados:
 | Variable        | Valor                                                      |
 |-----------------|------------------------------------------------------------|
 | `MQTT_BROKER`   | `a3658r5b4lb2u7-ats.iot.us-east-2.amazonaws.com`           |
-| `MQTT_PORT`     | `8883`                                                      |
-| `MQTT_CLIENT_ID`| `somnolence-pi-team06` (debe coincidir con el Thing)       |
+| `MQTT_PORT`     | `8883` normalmente; `443` + `MQTT_ALPN=x-amzn-mqtt-ca` si la red bloquea 8883 (caso de la wifi de la facultad) |
+| `MQTT_CLIENT_ID`| Debe coincidir con el **nombre del Thing** y ser **único entre Pis** — si dos Pis usan el mismo, IoT Core expulsa una (ej. `somnolence-pi-team06`, `somnolence-pi-team07`, ...) |
 | `MQTT_CA_CERT`    | ruta absoluta al `AmazonRootCA1.pem`                     |
 | `MQTT_CLIENT_CERT`| ruta absoluta al `*-certificate.pem.crt`                |
 | `MQTT_CLIENT_KEY` | ruta absoluta al `*-private.pem.key`                    |
