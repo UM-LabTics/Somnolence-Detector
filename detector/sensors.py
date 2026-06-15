@@ -14,6 +14,10 @@ class SensorInterface(ABC):
         """Read environmental values. Returns {temperature, humidity, co2} or None."""
         ...
 
+    def current_speed_kmh(self) -> Optional[float]:
+        """Return vehicle speed in km/h without doing a full sensor read. Non-blocking."""
+        return None
+
     def close(self) -> None:
         pass
 
@@ -27,14 +31,16 @@ class MockSensor(SensorInterface):
         self._co2 = 450.0
         self._lat = -34.6037
         self._lon = -58.3816
-        self._speed = 0.0
+        self._speed = 60.0  # start as if moving
+
+    def current_speed_kmh(self) -> Optional[float]:
+        return round(self._speed, 1)
 
     def read(self) -> Optional[dict]:
         self._temp = max(15.0, min(40.0, self._temp + random.uniform(-0.3, 0.3)))
         self._humidity = max(20.0, min(90.0, self._humidity + random.uniform(-1.0, 1.0)))
         self._co2 = max(350.0, min(2000.0, self._co2 + random.uniform(-10.0, 10.0)))
         self._speed = max(0.0, min(130.0, self._speed + random.uniform(-2.0, 2.0)))
-
         return {
             "temperature": round(self._temp, 1),
             "humidity": round(self._humidity, 1),
@@ -64,6 +70,9 @@ class PiSensor(SensorInterface):
         self._co2 = MHZ19C(port=config.get("co2_port", "/dev/ttyAMA1"))
         self._gps = GPS(port=config.get("gps_port", "/dev/ttyAMA0"))
         logger.info("PiSensor ready (DHT22 IIO + MH-Z19C UART1 + GPS UART0)")
+
+    def current_speed_kmh(self) -> Optional[float]:
+        return self._gps.get_fix().speed_kmh
 
     def read(self) -> Optional[dict]:
         result: dict = {}
