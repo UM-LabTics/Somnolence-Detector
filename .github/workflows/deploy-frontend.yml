@@ -75,8 +75,12 @@ jobs:
           set -e
           echo "health:"; curl -sk --max-time 25 "$ALB_URL/health"; echo
           curl -sk --max-time 25 "$ALB_URL/health" | grep -q '"status":"ok"'
+          # backend accesible sin auth vía ALB: /openapi.json (la regla del listener lo rutea al backend)
+          openapi=$(curl -sk --max-time 25 -o /dev/null -w "%{http_code}" "$ALB_URL/openapi.json")
+          # /api/* ruteado al backend: respuesta del backend (200 público o 401 si pide auth), NO 307/404 del front
           api=$(curl -sk --max-time 25 -o /dev/null -w "%{http_code}" "$ALB_URL/api/devices/")
           front=$(curl -sk --max-time 25 -o /dev/null -w "%{http_code}" "$ALB_URL/")
-          echo "api=$api front=$front"
-          [ "$api" = "200" ]
+          echo "openapi=$openapi api=$api front=$front"
+          [ "$openapi" = "200" ]
+          [ "$api" = "200" ] || [ "$api" = "401" ]
           [ "$front" -ge 200 ] && [ "$front" -lt 400 ]
