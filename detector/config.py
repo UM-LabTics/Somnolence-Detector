@@ -102,4 +102,11 @@ def load_config() -> dict:
     config["gps_port"] = os.environ.get("GPS_PORT", "/dev/ttyAMA0")
     config["co2_port"] = os.environ.get("CO2_PORT", "/dev/ttyAMA1")
 
+    # Minimum vehicle speed (km/h) required to trigger actuators and publish MQTT alerts.
+    # 0 = always alert regardless of speed (default).
+    # Example: 5 suppresses alerts when the vehicle is parked or barely moving.
+    # TODO(frontend): expose this as a per-device slider in the dashboard
+    #   so operators can adjust the threshold without redeploying.
+    config["alert_min_speed_kmh"] = float(os.environ.get("ALERT_MIN_SPEED_KMH", "0"))
+
     return config
