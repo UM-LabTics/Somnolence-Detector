@@ -25,71 +25,70 @@ class MockSensor(SensorInterface):
         self._temp = 24.0
         self._humidity = 55.0
         self._co2 = 450.0
+        self._lat = -34.6037
+        self._lon = -58.3816
+        self._speed = 0.0
 
     def read(self) -> Optional[dict]:
         self._temp = max(15.0, min(40.0, self._temp + random.uniform(-0.3, 0.3)))
         self._humidity = max(20.0, min(90.0, self._humidity + random.uniform(-1.0, 1.0)))
         self._co2 = max(350.0, min(2000.0, self._co2 + random.uniform(-10.0, 10.0)))
+        self._speed = max(0.0, min(130.0, self._speed + random.uniform(-2.0, 2.0)))
 
         return {
             "temperature": round(self._temp, 1),
             "humidity": round(self._humidity, 1),
             "co2": round(self._co2, 0),
+            "gps_lat": round(self._lat + random.uniform(-0.0001, 0.0001), 6),
+            "gps_lon": round(self._lon + random.uniform(-0.0001, 0.0001), 6),
+            "gps_speed_kmh": round(self._speed, 1),
+            "gps_moving": self._speed >= 5.0,
+            "gps_fix": True,
+            "gps_utc": None,
         }
 
 
 class PiSensor(SensorInterface):
-    """Real sensor for Raspberry Pi 5 — DHT11 via adafruit-circuitpython-dht.
+    """Real sensor stack for Raspberry Pi 5.
 
-    The Pi 5 GPIO is routed through the RP1 chip (PCIe), which introduces
-    timing jitter the kernel `dht11` driver cannot tolerate. The userspace
-    Adafruit library is more forgiving but still misses many reads, so we
-    retry up to `max_retries` times per call with a short cooldown.
-
-    CO2 is not measured (no MH-Z19C sensor wired). Field returned as None.
+    - DHT22 via kernel IIO sysfs (dtoverlay=dht11,gpiopin=4)
+    - MH-Z19C CO2 via UART1 (/dev/ttyAMA1, uart1-pi5 overlay)
+    - GPS GY-NEO6MV2 via UART0 (/dev/ttyAMA0, uart0-pi5 overlay) — background thread
     """
 
     def __init__(self, config: dict):
-        import adafruit_dht
-        import board
-
-        pin_num = int(config.get("dht11_pin", 4))
-        pin_obj = getattr(board, f"D{pin_num}")
-        self._dht = adafruit_dht.DHT11(pin_obj, use_pulseio=False)
-        self._max_retries = int(config.get("dht11_max_retries", 15))
-        self._retry_sleep = float(config.get("dht11_retry_sleep_s", 0.5))
-        logger.info(
-            f"PiSensor ready (DHT11 on GPIO{pin_num}, max_retries={self._max_retries})"
-        )
+        from sensors.dht22 import DHT22
+        from sensors.mhz19c import MHZ19C
+        from sensors.gps import GPS
+        self._dht = DHT22()
+        self._co2 = MHZ19C(port=config.get("co2_port", "/dev/ttyAMA1"))
+        self._gps = GPS(port=config.get("gps_port", "/dev/ttyAMA0"))
+        logger.info("PiSensor ready (DHT22 IIO + MH-Z19C UART1 + GPS UART0)")
 
     def read(self) -> Optional[dict]:
-        import time
+        result: dict = {}
 
-        last_err = None
-        for attempt in range(1, self._max_retries + 1):
-            try:
-                t = self._dht.temperature
-                h = self._dht.humidity
-                if t is not None and h is not None:
-                    if attempt > 1:
-                        logger.debug(f"DHT11 read OK after {attempt} attempts")
-                    return {
-                        "temperature": round(float(t), 1),
-                        "humidity": round(float(h), 1),
-                        "co2": None,
-                    }
-            except RuntimeError as e:
-                last_err = str(e)
-            time.sleep(self._retry_sleep)
+        dht = self._dht.read()
+        if dht:
+            result["temperature"] = dht["temperature"]
+            result["humidity"] = dht["humidity"]
 
-        logger.warning(
-            f"DHT11 read failed after {self._max_retries} attempts (last error: {last_err})"
-        )
-        return None
+        result["co2"] = self._co2.read()
+
+        fix = self._gps.get_fix()
+        result["gps_lat"] = fix.latitude
+        result["gps_lon"] = fix.longitude
+        result["gps_speed_kmh"] = fix.speed_kmh
+        result["gps_moving"] = fix.is_moving
+        result["gps_fix"] = fix.has_fix
+        result["gps_utc"] = fix.utc_time
+
+        return result
 
     def close(self) -> None:
         try:
-            self._dht.exit()
+            self._co2.close()
+            self._gps.close()
         except Exception as e:
             logger.warning(f"PiSensor close error: {e}")
 
