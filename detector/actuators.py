@@ -1,7 +1,6 @@
 """Alert actuator interface (buzzer + LED) with mock and hardware implementations."""
 
 import logging
-import time
 from abc import ABC, abstractmethod
 
 logger = logging.getLogger(__name__)
@@ -36,71 +35,34 @@ class MockActuator(ActuatorInterface):
 
 
 class PiActuator(ActuatorInterface):
-    """Real actuator for Raspberry Pi 5 using gpiozero + lgpio.
+    """Real actuator for Raspberry Pi 5.
 
-    Buzzer: passive piezo on PWM pin (default GPIO17).
-    LED: optional indicator on digital pin (default GPIO27). If the pin is
-    not wired, gpiozero still allocates it harmlessly.
+    Delegates to sensors.buzzer.Buzzer (GPIO18, active buzzer) and
+    sensors.led.LED (GPIO23). Patterns: LOW=1, MEDIUM=2, HIGH=5 beeps/blinks.
     """
 
-    _PATTERNS = {
-        "LOW":    {"freq_hz": 800,  "beeps": 1, "beep_s": 0.15, "gap_s": 0.10, "led_blinks": 1, "led_rate_s": 0.20},
-        "MEDIUM": {"freq_hz": 1200, "beeps": 2, "beep_s": 0.15, "gap_s": 0.10, "led_blinks": 3, "led_rate_s": 0.12},
-        "HIGH":   {"freq_hz": 2000, "beeps": 1, "beep_s": 1.00, "gap_s": 0.00, "led_blinks": 0, "led_rate_s": 0.00},
-    }
-
     def __init__(self, config: dict):
-        from gpiozero import PWMOutputDevice, LED  # local import: only on Pi
-
-        self._buzzer_pin = int(config.get("buzzer_pin", 17))
-        self._led_pin = config.get("led_pin")  # None = no LED wired yet
-        self._duty = float(config.get("buzzer_duty", 0.5))
-
-        self._buzzer = PWMOutputDevice(self._buzzer_pin, frequency=1000, initial_value=0)
-        self._led = LED(int(self._led_pin)) if self._led_pin is not None else None
+        from sensors.buzzer import Buzzer
+        from sensors.led import LED
+        self._buzzer = Buzzer(pin=int(config.get("buzzer_pin", 18)))
+        self._led = LED(pin=int(config.get("led_pin", 23)))
         logger.info(
-            f"PiActuator ready (buzzer=GPIO{self._buzzer_pin} PWM, "
-            f"led={'GPIO' + str(self._led_pin) if self._led else 'disabled'})"
+            f"PiActuator ready (buzzer=GPIO{config.get('buzzer_pin', 18)}, "
+            f"led=GPIO{config.get('led_pin', 23)})"
         )
 
     def activate(self, severity: str) -> None:
-        pat = self._PATTERNS.get(severity)
-        if pat is None:
-            logger.warning(f"PiActuator: unknown severity '{severity}', skipping")
-            return
-
-        if self._led is not None:
-            if severity == "HIGH":
-                self._led.on()
-            else:
-                for _ in range(pat["led_blinks"]):
-                    self._led.on()
-                    time.sleep(pat["led_rate_s"] / 2)
-                    self._led.off()
-                    time.sleep(pat["led_rate_s"] / 2)
-
-        self._buzzer.frequency = pat["freq_hz"]
-        for i in range(pat["beeps"]):
-            self._buzzer.value = self._duty
-            time.sleep(pat["beep_s"])
-            self._buzzer.value = 0
-            if i < pat["beeps"] - 1:
-                time.sleep(pat["gap_s"])
-
-        if self._led is not None and severity == "HIGH":
-            self._led.off()
+        self._buzzer.beep(severity)
+        self._led.blink(severity)
 
     def deactivate(self) -> None:
-        self._buzzer.value = 0
-        if self._led is not None:
-            self._led.off()
+        self._buzzer.off()
+        self._led.off()
 
     def close(self) -> None:
         try:
-            self.deactivate()
             self._buzzer.close()
-            if self._led is not None:
-                self._led.close()
+            self._led.close()
         except Exception as e:
             logger.warning(f"PiActuator close error: {e}")
 
