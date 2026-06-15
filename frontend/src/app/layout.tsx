@@ -1,21 +1,30 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, IBM_Plex_Mono, Instrument_Serif } from "next/font/google";
 import "./globals.css";
 import { Header } from "@/components/header";
+import { AuthProvider } from "@/lib/auth-context";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const plexMono = IBM_Plex_Mono({
+  variable: "--font-plex-mono",
   subsets: ["latin"],
+  weight: ["300", "400", "500", "600"],
+});
+
+const instrumentSerif = Instrument_Serif({
+  variable: "--font-instrument-serif",
+  subsets: ["latin"],
+  weight: "400",
+  style: "normal",
 });
 
 export const metadata: Metadata = {
-  title: "Sistema de Control de Cansancio",
-  description: "Dashboard de monitoreo de somnolencia en conductores",
+  title: "Somnolence · Control Center",
+  description: "Monitoreo crítico de somnolencia en conductores",
 };
 
 export default function RootLayout({
@@ -26,11 +35,17 @@ export default function RootLayout({
   return (
     <html
       lang="es"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`dark ${geistSans.variable} ${plexMono.variable} ${instrumentSerif.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">
-        <Header />
-        <main className="flex-1">{children}</main>
+      <body className="relative min-h-full flex flex-col">
+        <div
+          aria-hidden
+          className="pointer-events-none fixed inset-0 grid-bg opacity-70"
+        />
+        <AuthProvider>
+          <Header />
+          <main className="relative flex-1">{children}</main>
+        </AuthProvider>
       </body>
     </html>
   );

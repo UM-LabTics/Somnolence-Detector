@@ -1,8 +1,11 @@
 import logging
+import os
 import signal
 import time
 
 import cv2
+
+HEADLESS = os.environ.get("HEADLESS", "false").lower() == "true"
 
 from actuators import create_actuator
 from config import get_or_create_device_id, load_config
@@ -21,6 +24,7 @@ ALERT_LABELS = {
     "EYE_CLOSURE": "SOMNOLENCIA",
     "YAWN": "BOSTEZO",
     "HEAD_NOD": "CABECEO",
+    "PHONE_USE": "USO DE CELULAR",
 }
 
 SEVERITY_COLORS = {
@@ -55,11 +59,11 @@ def draw_metrics(frame, metrics, config):
     )
 
     perclos_pct = metrics.perclos * 100
-    if perclos_pct >= 80:
+    if metrics.perclos >= config["perclos_high_threshold"]:
         perclos_color = (0, 0, 255)
-    elif perclos_pct >= 70:
+    elif metrics.perclos >= config["perclos_medium_threshold"]:
         perclos_color = (0, 165, 255)
-    elif perclos_pct >= 60:
+    elif metrics.perclos >= config["perclos_low_threshold"]:
         perclos_color = (0, 255, 255)
     else:
         perclos_color = (0, 255, 0)
@@ -82,7 +86,7 @@ def draw_metrics(frame, metrics, config):
     y = 60
     pitch_color = (
         (0, 0, 255)
-        if abs(metrics.pitch) > config["pitch_threshold"]
+        if -config["pitch_threshold"] <= metrics.pitch < 0
         else (0, 255, 0)
     )
     cv2.putText(
@@ -94,6 +98,49 @@ def draw_metrics(frame, metrics, config):
         pitch_color,
         2,
     )
+
+    # Line 3: Hand-Ear distance (phone use detection)
+    y = 90
+    if metrics.hand_detected:
+        dist_color = (
+            (0, 0, 255)
+            if metrics.hand_ear_distance < config["phone_distance_threshold"]
+            else (0, 255, 0)
+        )
+        cv2.putText(
+            frame,
+            f"Hand-Ear: {metrics.hand_ear_distance:.3f}",
+            (10, y),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            dist_color,
+            2,
+        )
+
+        # Line from closest hand point to closest ear landmark
+        if metrics.closest_hand_xy is not None and metrics.closest_ear_xy is not None:
+            h, w = frame.shape[:2]
+            hp = (
+                int(metrics.closest_hand_xy[0] * w),
+                int(metrics.closest_hand_xy[1] * h),
+            )
+            ep = (
+                int(metrics.closest_ear_xy[0] * w),
+                int(metrics.closest_ear_xy[1] * h),
+            )
+            cv2.line(frame, hp, ep, dist_color, 2)
+            cv2.circle(frame, hp, 5, dist_color, -1)
+            cv2.circle(frame, ep, 5, dist_color, -1)
+    else:
+        cv2.putText(
+            frame,
+            "Hand-Ear: -",
+            (10, y),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            (128, 128, 128),
+            2,
+        )
 
 
 def draw_alerts(frame, active_alerts):
@@ -133,7 +180,14 @@ def main():
 
     sync_manager.start()
 
-    cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture(config["camera_index"])
+    if not cap.isOpened():
+        logger.error(
+            "Could not open camera at index %s. On a Raspberry Pi run "
+            "`v4l2-ctl --list-devices` to find the USB webcam's index and set "
+            "CAMERA_INDEX accordingly.",
+            config["camera_index"],
+        )
     active_alerts = []
     last_env_time = 0.0
 
@@ -170,12 +224,12 @@ def main():
         # Purge expired display alerts
         active_alerts = [(e, t) for e, t in active_alerts if t > now_mono]
 
-        draw_metrics(frame, metrics, config)
-        draw_alerts(frame, active_alerts)
-
-        cv2.imshow("Somnolence Detector", frame)
-        if cv2.waitKey(1) & 0xFF == ord("q"):
-            break
+        if not HEADLESS:
+            draw_metrics(frame, metrics, config)
+            draw_alerts(frame, active_alerts)
+            cv2.imshow("Somnolence Detector", frame)
+            if cv2.waitKey(1) & 0xFF == ord("q"):
+                break
 
     # Cleanup
     logger.info("Shutting down...")
@@ -185,7 +239,8 @@ def main():
     sync_manager.stop()
     engine.close()
     cap.release()
-    cv2.destroyAllWindows()
+    if not HEADLESS:
+        cv2.destroyAllWindows()
     logger.info("Shutdown complete")
 
 

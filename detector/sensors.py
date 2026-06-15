@@ -39,20 +39,59 @@ class MockSensor(SensorInterface):
 
 
 class PiSensor(SensorInterface):
-    """Real sensor for Raspberry Pi. Stub — requires hardware libraries."""
+    """Real sensor for Raspberry Pi 5 — DHT11 via adafruit-circuitpython-dht.
+
+    The Pi 5 GPIO is routed through the RP1 chip (PCIe), which introduces
+    timing jitter the kernel `dht11` driver cannot tolerate. The userspace
+    Adafruit library is more forgiving but still misses many reads, so we
+    retry up to `max_retries` times per call with a short cooldown.
+
+    CO2 is not measured (no MH-Z19C sensor wired). Field returned as None.
+    """
 
     def __init__(self, config: dict):
-        logger.warning(
-            "PiSensor: hardware libraries not installed. "
-            "Install adafruit-circuitpython-dht and mh-z19 on Raspberry Pi."
+        import adafruit_dht
+        import board
+
+        pin_num = int(config.get("dht11_pin", 4))
+        pin_obj = getattr(board, f"D{pin_num}")
+        self._dht = adafruit_dht.DHT11(pin_obj, use_pulseio=False)
+        self._max_retries = int(config.get("dht11_max_retries", 15))
+        self._retry_sleep = float(config.get("dht11_retry_sleep_s", 0.5))
+        logger.info(
+            f"PiSensor ready (DHT11 on GPIO{pin_num}, max_retries={self._max_retries})"
         )
 
     def read(self) -> Optional[dict]:
-        # TODO: Implement with BME280 (I2C) and MH-Z19C (UART)
+        import time
+
+        last_err = None
+        for attempt in range(1, self._max_retries + 1):
+            try:
+                t = self._dht.temperature
+                h = self._dht.humidity
+                if t is not None and h is not None:
+                    if attempt > 1:
+                        logger.debug(f"DHT11 read OK after {attempt} attempts")
+                    return {
+                        "temperature": round(float(t), 1),
+                        "humidity": round(float(h), 1),
+                        "co2": None,
+                    }
+            except RuntimeError as e:
+                last_err = str(e)
+            time.sleep(self._retry_sleep)
+
+        logger.warning(
+            f"DHT11 read failed after {self._max_retries} attempts (last error: {last_err})"
+        )
         return None
 
     def close(self) -> None:
-        pass
+        try:
+            self._dht.exit()
+        except Exception as e:
+            logger.warning(f"PiSensor close error: {e}")
 
 
 def create_sensor(config: dict) -> SensorInterface:

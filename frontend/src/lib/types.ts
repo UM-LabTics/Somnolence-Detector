@@ -73,3 +73,40 @@ export interface AlertNotificationResponse {
   created_at: string;
   acknowledged: boolean;
 }
+
+export type UserRole = "ADMIN" | "OPERATOR";
+
+export interface UserResponse {
+  id: string;
+  email: string;
+  full_name: string;
+  role: UserRole;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TokenResponse {
+  access_token: string;
+  token_type: string;
+  user: UserResponse;
+}
+
+export interface UserCreatePayload {
+  email: string;
+  password: string;
+  full_name: string;
+  role: UserRole;
+}
+
+export interface AlertResponse {
+  id: string;
+  device_id: string;
+  alert_type: AlertType;
+  severity: Severity;
+  value: number;
+  threshold: number;
+  timestamp: string;
+  synced_at: string | null;
+  metadata: Record<string, unknown> | null;
+}

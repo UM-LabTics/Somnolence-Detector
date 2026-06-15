@@ -44,6 +44,7 @@ def generate_alert():
         "EYE_CLOSURE": {"value_range": (0.10, 0.20), "threshold": 0.21},
         "YAWN": {"value_range": (0.6, 0.95), "threshold": 0.55},
         "HEAD_NOD": {"value_range": (15.0, 45.0), "threshold": 12.0},
+        "PHONE_USE": {"value_range": (0.03, 0.14), "threshold": 0.15},
     }
 
     alert_type = random.choice(list(alert_configs.keys()))

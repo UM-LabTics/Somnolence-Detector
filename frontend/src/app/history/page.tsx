@@ -7,6 +7,7 @@ import type { DeviceResponse, HistoryResponse } from "@/lib/types";
 import { HistoryFilters } from "@/components/history/history-filters";
 import { HistoryChart } from "@/components/history/history-chart";
 import { HistoryTable } from "@/components/history/history-table";
+import { AlertsHistoryTable } from "@/components/history/alerts-history-table";
 
 function defaultStartDate(): string {
   const d = new Date();
@@ -70,6 +71,12 @@ export default function HistoryPage() {
           <HistoryTable
             data={history.data?.data ?? []}
             groupBy={groupBy}
+          />
+          <AlertsHistoryTable
+            startDate={startDate}
+            endDate={endDate}
+            deviceId={deviceId}
+            devices={devices.data ?? []}
           />
         </>
       )}

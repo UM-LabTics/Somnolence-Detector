@@ -1,0 +1,83 @@
+{
+  "containerDefinitions": [
+    {
+      "name": "backend",
+      "image": "374648537332.dkr.ecr.us-east-2.amazonaws.com/somnolence-backend:latest",
+      "cpu": 0,
+      "portMappings": [
+        {
+          "containerPort": 8000,
+          "hostPort": 8000,
+          "protocol": "tcp"
+        }
+      ],
+      "essential": true,
+      "environment": [
+        {
+          "name": "MQTT_BROKER",
+          "value": "a3658r5b4lb2u7-ats.iot.us-east-2.amazonaws.com"
+        },
+        {
+          "name": "MQTT_CLIENT_KEY",
+          "value": "/tmp/certs/device-private.pem.key"
+        },
+        {
+          "name": "DATABASE_URL",
+          "value": "postgresql+asyncpg://somnolence_admin:password@somnolence-db.c9a2u4qoa4bl.us-east-2.rds.amazonaws.com:5432/somnolence"
+        },
+        {
+          "name": "MQTT_CA_CERT",
+          "value": "/tmp/certs/AmazonRootCA1.pem"
+        },
+        {
+          "name": "MQTT_PORT",
+          "value": "8883"
+        },
+        {
+          "name": "MQTT_CLIENT_CERT",
+          "value": "/tmp/certs/device-cert.pem.crt"
+        },
+        {
+          "name": "CORS_ORIGINS",
+          "value": "*"
+        }
+      ],
+      "mountPoints": [],
+      "volumesFrom": [],
+      "secrets": [
+        {
+          "name": "MQTT_CA_CERT_CONTENT",
+          "valueFrom": "arn:aws:secretsmanager:us-east-2:374648537332:secret:somnolence/iot/ca-CaAC7a"
+        },
+        {
+          "name": "MQTT_CLIENT_CERT_CONTENT",
+          "valueFrom": "arn:aws:secretsmanager:us-east-2:374648537332:secret:somnolence/iot/cert-qQc0YU"
+        },
+        {
+          "name": "MQTT_CLIENT_KEY_CONTENT",
+          "valueFrom": "arn:aws:secretsmanager:us-east-2:374648537332:secret:somnolence/iot/key-q31ff8"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/somnolence-backend",
+          "awslogs-create-group": "true",
+          "awslogs-region": "us-east-2",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "systemControls": []
+    }
+  ],
+  "family": "somnolence-backend",
+  "executionRoleArn": "arn:aws:iam::374648537332:role/ecsTaskExecutionRole",
+  "networkMode": "awsvpc",
+  "volumes": [],
+  "placementConstraints": [],
+  "requiresCompatibilities": [
+    "FARGATE"
+  ],
+  "cpu": "512",
+  "memory": "1024"
+}
