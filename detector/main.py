@@ -190,8 +190,11 @@ def main():
         )
     active_alerts = []
     last_env_time = 0.0
+    alert_min_speed = config.get("alert_min_speed_kmh", 0)
 
     logger.info("Somnolence Detector started — press 'q' to quit")
+    if alert_min_speed > 0:
+        logger.info(f"Speed threshold active: alerts suppressed below {alert_min_speed} km/h")
 
     while cap.isOpened() and not shutdown_requested:
         ret, frame = cap.read()
@@ -203,14 +206,36 @@ def main():
 
         now_mono = time.monotonic()
         for event in events:
-            sync_manager.queue_alert(event)
-            actuator.activate(event.severity)
-            active_alerts.append((event, now_mono + ALERT_DISPLAY_SECONDS))
-            label = ALERT_LABELS.get(event.alert_type, event.alert_type)
-            logger.info(
-                f"[ALERT] {label} severity={event.severity} "
-                f"value={event.value} threshold={event.threshold}"
+            speed = sensor.current_speed_kmh()
+            vehicle_stopped = (
+                alert_min_speed > 0
+                and speed is not None
+                and speed < alert_min_speed
             )
+
+            if event.metadata is None:
+                event.metadata = {}
+            if speed is not None:
+                event.metadata["speed_kmh"] = round(speed, 1)
+                event.metadata["is_moving"] = not vehicle_stopped
+
+            if vehicle_stopped:
+                event.metadata["suppressed"] = "vehicle_stopped"
+                logger.info(
+                    f"[ALERT SUPRIMIDA] {event.alert_type} severity={event.severity} "
+                    f"— vehículo detenido ({speed:.1f} km/h < {alert_min_speed} km/h)"
+                )
+            else:
+                actuator.activate(event.severity)
+                label = ALERT_LABELS.get(event.alert_type, event.alert_type)
+                logger.info(
+                    f"[ALERT] {label} severity={event.severity} "
+                    f"value={event.value} threshold={event.threshold}"
+                    + (f" speed={speed:.1f}km/h" if speed is not None else "")
+                )
+
+            sync_manager.queue_alert(event, publish=not vehicle_stopped)
+            active_alerts.append((event, now_mono + ALERT_DISPLAY_SECONDS))
 
         # Environmental readings at configured interval
         now_wall = time.time()
