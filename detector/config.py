@@ -95,9 +95,11 @@ def load_config() -> dict:
     config["mock_actuators"] = os.environ.get("MOCK_ACTUATORS", "true").lower() == "true"
 
     # Hardware pins (BCM numbering)
-    config["dht11_pin"] = int(os.environ.get("DHT11_PIN", "4"))
-    config["buzzer_pin"] = int(os.environ.get("BUZZER_PIN", "17"))
-    led_pin = os.environ.get("LED_PIN", "")  # empty = LED not wired yet
-    config["led_pin"] = int(led_pin) if led_pin else None
+    config["buzzer_pin"] = int(os.environ.get("BUZZER_PIN", "18"))
+    config["led_pin"] = int(os.environ.get("LED_PIN", "23"))
+
+    # Peripheral UART ports
+    config["gps_port"] = os.environ.get("GPS_PORT", "/dev/ttyAMA0")
+    config["co2_port"] = os.environ.get("CO2_PORT", "/dev/ttyAMA1")
 
     return config
