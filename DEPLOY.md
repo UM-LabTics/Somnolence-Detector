@@ -27,11 +27,27 @@ Sistema en **AWS account `374648537332`, región `us-east-2`**, perfil SSO
 - `assignPublicIp: ENABLED`
 - Exec role: `ecsTaskExecutionRole`
 
-### Fix rápido aplicado hoy (parche temporal, NO durable)
-El frontend tenía horneada una IP **vieja** del backend en `NEXT_PUBLIC_API_URL`.
-Se registró `somnolence-frontend:2` apuntando a la IP actual del backend y se
-forzó redeploy. **Funciona hasta el próximo restart del backend** (la IP vuelve
-a cambiar). La cura definitiva es la **Fase 1 (ALB)** de abajo.
+### ✅ RESUELTO (2026-06-15) — Fase 1 (ALB) y Fase 2 (imagen prod del front)
+El parche temporal de la IP horneada **ya no aplica**: se desplegó el ALB y la
+imagen de producción del frontend. El endpoint estable es:
+
+> **`https://somnolence-alb-1116710331.us-east-2.elb.amazonaws.com`** (DNS fijo,
+> no cambia nunca más; cert self-signed → el browser pide "continuar").
+
+El frontend ahora llama `/api/*` **same-origin** (al mismo ALB) — no hay ninguna
+IP/DNS de backend horneado. Ver "Recursos reales" abajo y el detalle en cada fase.
+
+### Recursos reales desplegados (us-east-2, account 374648537332)
+| Recurso | ID / ARN |
+|---|---|
+| ALB | `somnolence-alb` — `arn:...:loadbalancer/app/somnolence-alb/a12aec02a362cf0d` |
+| DNS del ALB | `somnolence-alb-1116710331.us-east-2.elb.amazonaws.com` |
+| Listener 443 | `arn:...:listener/app/somnolence-alb/a12aec02a362cf0d/cc44883f834fcbbb` |
+| TG backend | `somnolence-tg-backend` (`/health`) — `arn:...:targetgroup/somnolence-tg-backend/10feb5f8b258f9b0` |
+| TG frontend | `somnolence-tg-frontend` (`/`) — `arn:...:targetgroup/somnolence-tg-frontend/63010d75a32c33a9` |
+| SG del ALB | `somnolence-alb-sg` — `sg-026d44eda220a5d9f` (80/443 a internet) |
+| Cert ACM | `arn:...:certificate/b6e14e6e-df4a-45ef-b2c9-2e5368379aea` (self-signed, CN `somnolence-demo.local`) |
+| Task-def frontend prod | `somnolence-frontend:4` (imagen `somnolence-frontend:prod-3be8db0`) |
 
 ### Los dos problemas de raíz que este plan resuelve
 1. **IPs cambiantes**: Fargate/awsvpc asigna un **ENI nuevo por task** en cada
@@ -71,12 +87,20 @@ más cambia**.
 
 ---
 
-## Fase 1 — ALB (la pieza que mata el problema de las IPs) 🔴 prioridad
+## Fase 1 — ALB (la pieza que mata el problema de las IPs) ✅ HECHA (2026-06-15)
 
 > Decisión tomada: **sin dominio → cert self-signed importado a ACM**. Pasa el
 > firewall de la facultad (sigue siendo TLS/443); el browser muestra "no seguro
 > / continuar" — aceptable para demo académica. Si más adelante hay dominio,
 > reemplazar por cert ACM validado por DNS (HTTPS limpio).
+
+> **⚠️ Gotcha encontrado en 1.1:** ACM/ELB **rechaza** el cert si el CN no es un
+> FQDN. `-subj "/CN=somnolence-demo"` falla con `UnsupportedCertificate` al crear
+> el listener. Usar un CN con punto + SAN:
+> `-subj "/CN=somnolence-demo.local" -addext "subjectAltName=DNS:somnolence-demo.local"`.
+
+> **Nota 1.5:** `update-service --load-balancers` funcionó sin recrear los
+> servicios (ambos no tenían LB previo).
 
 ### 1.1 Cert self-signed → ACM
 ```bash
@@ -184,7 +208,20 @@ facultad (443) + frontend desacoplado de la IP del backend.
 
 ---
 
-## Fase 2 — Imágenes prod-ready + compose dev separado 🟡
+## Fase 2 — Imágenes prod-ready + compose dev separado 🟢 frontend HECHO (2026-06-15)
+
+> **✅ Frontend hecho:** `frontend/Dockerfile` ahora es multi-stage `next build`
+> + `output: standalone` + `node server.js` (en vez de `npm run dev`).
+> `next.config.ts` con `output: "standalone"`. `src/lib/api.ts` quedó same-origin
+> (`?? ""`) → el front llama `/api/*` al ALB, sin IP horneada (build-arg
+> `NEXT_PUBLIC_API_URL=""`). En el rollback de la fase 1 el `next dev` daba health
+> check con timeout (recompila por request); la imagen prod arranca rápido y el
+> health check de `/` pasa. Commit en rama `feat/frontend-prod-build`.
+> **Gotcha:** `next build` corre type-check (a diferencia de `next dev`) y
+> destapó 2 bugs de tipos reales (history-chart, alerts-history-table) — ya
+> arreglados. Correr `npx tsc --noEmit` local antes de buildear amd64 (lento).
+> **Pendiente:** revisar/confirmar imagen prod del **backend** y opcional
+> `docker-compose.prod.yml`.
 
 **Aclaración clave — "dev" significa dos cosas, no confundirlas:**
 - **`next dev` (el _modo_ de desarrollo):** hot-reload, recompila on-demand, lee
@@ -275,3 +312,9 @@ Fase 1.6) y fallar el job si alguno no da 200.
 - **2026-06-08** Cert: **self-signed** (no hay dominio). Revisar si aparece dominio.
 - **2026-06-08** Endpoint estable: **ALB** (no Elastic IP — no aplica a Fargate awsvpc).
 - **2026-06-08** Frontend→backend: vía **ALB same-origin `/api`** (no IP hardcodeada).
+- **2026-06-15** Fase 1 (ALB) **desplegada y verificada** (3 curl 1.6 OK). Cert con
+  CN FQDN (`somnolence-demo.local`) por requisito de ACM/ELB.
+- **2026-06-15** Fase 2 frontend **hecha**: imagen prod standalone, same-origin.
+  Bake `NEXT_PUBLIC_API_URL=""` (no DNS horneado). Código en `feat/frontend-prod-build`.
+- **2026-06-15** Entornos AWS: **uno solo** (`main` = prod; `develop` se prueba
+  local con compose). No se monta dev+prod separados en AWS (overkill académico).
