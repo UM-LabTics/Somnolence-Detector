@@ -74,8 +74,12 @@ class SyncManager:
         )
         self._db.close()
 
-    def queue_alert(self, event: DetectionEvent) -> None:
-        """Persist a DetectionEvent and attempt immediate MQTT publish."""
+    def queue_alert(self, event: DetectionEvent, publish: bool = True) -> None:
+        """Persist a DetectionEvent and optionally publish via MQTT.
+
+        publish=False saves to the local DB (audit trail) but intentionally
+        skips MQTT — used when the vehicle is below the speed threshold.
+        """
         timestamp = datetime.now(timezone.utc).isoformat()
 
         row_id = self._db.save_alert(
@@ -86,6 +90,10 @@ class SyncManager:
             metadata=event.metadata,
             timestamp=timestamp,
         )
+
+        if not publish:
+            self._db.mark_alert_synced(row_id)
+            return
 
         payload = {
             "alert_type": event.alert_type,
