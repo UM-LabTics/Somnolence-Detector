@@ -60,10 +60,11 @@ export function HistoryChart({ data, groupBy }: HistoryChartProps) {
                 color: "var(--card-foreground)",
                 borderRadius: "var(--radius)",
               }}
-              formatter={(value: number, name: string) => {
-                if (name === "Alertas") return [value, name];
-                if (name === "CO₂ (ppm)") return [Math.round(value), name];
-                return [Number(value).toFixed(1), name];
+              formatter={(value, name) => {
+                const num = Number(value);
+                if (name === "Alertas") return [num, name];
+                if (name === "CO₂ (ppm)") return [Math.round(num), name];
+                return [num.toFixed(1), name];
               }}
             />
             <Legend />

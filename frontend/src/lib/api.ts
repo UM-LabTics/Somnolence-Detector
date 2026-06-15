@@ -10,8 +10,10 @@ import type {
   UserResponse,
 } from "./types";
 
-const BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// `??` (no `||`): en el build de prod horneamos NEXT_PUBLIC_API_URL="" a
+// propósito → same-origin (las llamadas /api/* van al mismo ALB que sirve el
+// front). En dev local docker-compose setea http://localhost:8000.
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 const TOKEN_STORAGE_KEY = "somnolence_token";
 
