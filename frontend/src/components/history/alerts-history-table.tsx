@@ -65,13 +65,13 @@ export function AlertsHistoryTable({
     { deps: [startDate, endDate, deviceId, alertType, severity, skip] }
   );
 
-  function handleAlertTypeChange(val: string) {
-    setAlertType(val);
+  function handleAlertTypeChange(val: string | null) {
+    setAlertType(val ?? "all");
     setSkip(0);
   }
 
-  function handleSeverityChange(val: string) {
-    setSeverity(val);
+  function handleSeverityChange(val: string | null) {
+    setSeverity(val ?? "all");
     setSkip(0);
   }
 
