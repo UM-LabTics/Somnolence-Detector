@@ -18,6 +18,13 @@ class EnvironmentalAverages(BaseModel):
     avg_co2: Optional[float] = None
 
 
+class LatestEnvironmental(BaseModel):
+    temperature: Optional[float] = None
+    humidity: Optional[float] = None
+    co2: Optional[float] = None
+    timestamp: Optional[datetime] = None
+
+
 class RecentAlert(BaseModel):
     id: UUID
     device_id: UUID
@@ -32,6 +39,7 @@ class RecentAlert(BaseModel):
 
 class DashboardSummary(BaseModel):
     environmental: EnvironmentalAverages
+    latest_environmental: Optional[LatestEnvironmental] = None
     alert_counts_by_type: list[AlertCountByType]
     total_alerts: int
     recent_alerts: list[RecentAlert]

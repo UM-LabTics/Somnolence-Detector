@@ -7,6 +7,13 @@ export interface EnvironmentalAverages {
   avg_co2: number | null;
 }
 
+export interface LatestEnvironmental {
+  temperature: number | null;
+  humidity: number | null;
+  co2: number | null;
+  timestamp: string | null;
+}
+
 export interface AlertCountByType {
   alert_type: AlertType;
   count: number;
@@ -24,6 +31,7 @@ export interface RecentAlert {
 
 export interface DashboardSummary {
   environmental: EnvironmentalAverages;
+  latest_environmental: LatestEnvironmental | null;
   alert_counts_by_type: AlertCountByType[];
   total_alerts: number;
   recent_alerts: RecentAlert[];
