@@ -1,6 +1,7 @@
 """Alert actuator interface (buzzer + LED) with mock and hardware implementations."""
 
 import logging
+import threading
 from abc import ABC, abstractmethod
 
 logger = logging.getLogger(__name__)
@@ -52,6 +53,11 @@ class PiActuator(ActuatorInterface):
         )
 
     def activate(self, severity: str) -> None:
+        # Run in background so buzzer/LED sleep() doesn't block the detection loop
+        t = threading.Thread(target=self._fire, args=(severity,), daemon=True)
+        t.start()
+
+    def _fire(self, severity: str) -> None:
         self._buzzer.beep(severity)
         self._led.blink(severity)
 
