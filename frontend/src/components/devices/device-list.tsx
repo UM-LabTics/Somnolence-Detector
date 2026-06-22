@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useNow } from "@/hooks/use-now";
 import type { AlertNotificationResponse, DeviceResponse } from "@/lib/types";
-import { formatRelativeTime } from "@/lib/utils";
+import { formatRelativeTime, parseUtc } from "@/lib/utils";
 
 const TEN_MIN = 10 * 60 * 1000;
 
@@ -31,7 +31,7 @@ export function DeviceList({ devices, notifications }: DeviceListProps) {
         ).length;
         const isOnline =
           !!device.last_seen_at &&
-          now - new Date(device.last_seen_at).getTime() <= TEN_MIN;
+          now - parseUtc(device.last_seen_at).getTime() <= TEN_MIN;
 
         return (
           <Card key={device.id}>

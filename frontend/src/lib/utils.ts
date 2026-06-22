@@ -5,6 +5,11 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+/** Parse a UTC datetime string from the backend (no timezone suffix) as UTC. */
+export function parseUtc(iso: string): Date {
+  return new Date(/Z|[+-]\d{2}:\d{2}$/.test(iso) ? iso : iso + "Z");
+}
+
 const ALERT_TYPE_LABELS: Record<string, string> = {
   EYE_CLOSURE: "Cierre de ojos",
   YAWN: "Bostezo",
@@ -17,7 +22,7 @@ export function formatAlertType(type: string): string {
 }
 
 export function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString("es-UY", {
+  return parseUtc(iso).toLocaleTimeString("es-UY", {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
@@ -26,7 +31,7 @@ export function formatTime(iso: string): string {
 }
 
 export function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString("es-UY", {
+  return parseUtc(iso).toLocaleString("es-UY", {
     day: "2-digit",
     month: "2-digit",
     hour: "2-digit",
@@ -36,7 +41,7 @@ export function formatDateTime(iso: string): string {
 }
 
 export function formatRelativeTime(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
+  const diff = Date.now() - parseUtc(iso).getTime();
   const minutes = Math.floor(diff / 60000);
   if (minutes < 1) return "ahora";
   if (minutes < 60) return `hace ${minutes} min`;
@@ -47,7 +52,7 @@ export function formatRelativeTime(iso: string): string {
 }
 
 export function formatPeriod(iso: string, groupBy: string): string {
-  const d = new Date(iso);
+  const d = parseUtc(iso);
   if (groupBy === "hour") {
     return d.toLocaleTimeString("es-UY", { hour: "2-digit", minute: "2-digit", hour12: false });
   }

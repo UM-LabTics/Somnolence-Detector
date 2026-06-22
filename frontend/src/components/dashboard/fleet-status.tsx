@@ -6,7 +6,7 @@ import type {
   DeviceResponse,
   TimelineEvent,
 } from "@/lib/types";
-import { cn } from "@/lib/utils";
+import { cn, parseUtc } from "@/lib/utils";
 import { useNow } from "@/hooks/use-now";
 
 type Status = "nominal" | "elevated" | "critical" | "unknown";
@@ -76,7 +76,7 @@ export function FleetStatus({
     let criticals5 = 0;
     for (const e of timeline) {
       if (e.event_type !== "alert") continue;
-      const age = now - new Date(e.timestamp).getTime();
+      const age = now - parseUtc(e.timestamp).getTime();
       if (age <= FIFTEEN_MIN) alerts15++;
       if (age <= FIVE_MIN && e.severity === "HIGH") criticals5++;
     }
@@ -86,7 +86,7 @@ export function FleetStatus({
     const total = devices?.length ?? 0;
     const online = (devices ?? []).filter((d) => {
       if (!d.is_active || !d.last_seen_at) return false;
-      return now - new Date(d.last_seen_at).getTime() <= TEN_MIN;
+      return now - parseUtc(d.last_seen_at).getTime() <= TEN_MIN;
     }).length;
 
     let status: Status = "nominal";
