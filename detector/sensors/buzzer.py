@@ -15,14 +15,13 @@ logger = logging.getLogger(__name__)
 
 # LOW / MEDIUM: classic beep pattern with short gaps
 _PATTERNS = {
-    "LOW":    {"beeps": 2, "beep_s": 0.25, "gap_s": 0.08},
-    "MEDIUM": {"beeps": 4, "beep_s": 0.20, "gap_s": 0.06},
+    "LOW":    {"beeps": 2, "beep_s": 0.35, "gap_s": 0.10},
+    "MEDIUM": {"beeps": 3, "beep_s": 0.35, "gap_s": 0.08},
 }
 
-# HIGH: continuous rapid on/off alarm — no silence, just alternating cycles
-_HIGH_CYCLE_ON  = 0.08   # seconds ON per cycle
-_HIGH_CYCLE_OFF = 0.04   # seconds OFF per cycle  (brief — keeps buzzer near-continuous)
-_HIGH_DURATION  = 1.5    # total alarm duration in seconds
+# HIGH: solid continuous buzz — no gaps so the internal oscillator
+# runs at full resonance the entire time (loudest possible in software)
+_HIGH_DURATION = 2.0   # seconds of uninterrupted buzz
 
 
 class Buzzer:
@@ -50,13 +49,10 @@ class Buzzer:
                 time.sleep(pat["gap_s"])
 
     def _alarm(self) -> None:
-        """Rapid on/off cycle for HIGH — sounds like a continuous alarm."""
-        deadline = time.monotonic() + _HIGH_DURATION
-        while time.monotonic() < deadline:
-            self._dev.on()
-            time.sleep(_HIGH_CYCLE_ON)
-            self._dev.off()
-            time.sleep(_HIGH_CYCLE_OFF)
+        """Solid uninterrupted buzz for HIGH — max resonance, loudest possible."""
+        self._dev.on()
+        time.sleep(_HIGH_DURATION)
+        self._dev.off()
 
     def off(self) -> None:
         self._dev.off()
