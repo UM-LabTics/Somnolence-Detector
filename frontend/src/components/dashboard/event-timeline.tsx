@@ -104,8 +104,8 @@ export function EventTimeline({
                         </span>
                       ) : (
                         <span className="text-muted-foreground">
-                          {e.temperature?.toFixed(1)}°C ·{" "}
-                          {e.humidity?.toFixed(0)}% ·{" "}
+                          {e.temperature != null ? `${e.temperature.toFixed(1)}°C` : "—°C"} ·{" "}
+                          {e.humidity != null ? `${e.humidity.toFixed(0)}%` : "—%"} ·{" "}
                           {Math.round(e.co2 ?? 0)} ppm
                         </span>
                       )}
