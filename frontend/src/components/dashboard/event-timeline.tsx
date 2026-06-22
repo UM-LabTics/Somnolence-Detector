@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { DeviceResponse, TimelineEvent } from "@/lib/types";
 import { cn, formatAlertType, formatTime } from "@/lib/utils";
 
@@ -21,12 +21,18 @@ export function EventTimeline({
   devices,
   className,
 }: EventTimelineProps) {
+  const [hideEnv, setHideEnv] = useState(false);
+
   const deviceName = useMemo(() => {
     const map = new Map(devices?.map((d) => [d.id, d.name]) ?? []);
     return (id: string) => map.get(id) ?? id.slice(0, 6);
   }, [devices]);
 
-  const items = (events ?? []).slice(0, 60);
+  const items = useMemo(() => {
+    const all = events ?? [];
+    const filtered = hideEnv ? all.filter((e) => e.event_type === "alert") : all;
+    return filtered.slice(0, 60);
+  }, [events, hideEnv]);
 
   return (
     <div
@@ -37,7 +43,20 @@ export function EventTimeline({
     >
       <div className="flex items-center justify-between border-b border-border px-6 py-3">
         <span className="mono-label">Event Log · realtime</span>
-        <span className="mono-label tabular">{items.length} rows</span>
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => setHideEnv((v) => !v)}
+            className={cn(
+              "mono-label rounded px-2 py-0.5 ring-1 transition-colors",
+              hideEnv
+                ? "bg-accent ring-border text-muted-foreground"
+                : "bg-transparent ring-border/40 text-muted-foreground hover:ring-border"
+            )}
+          >
+            {hideEnv ? "ENV oculto" : "ENV"}
+          </button>
+          <span className="mono-label tabular">{items.length} rows</span>
+        </div>
       </div>
 
       {items.length === 0 ? (
