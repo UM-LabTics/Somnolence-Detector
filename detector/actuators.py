@@ -58,8 +58,11 @@ class PiActuator(ActuatorInterface):
         t.start()
 
     def _fire(self, severity: str) -> None:
-        self._buzzer.beep(severity)
-        self._led.blink(severity)
+        try:
+            self._buzzer.beep(severity)
+            self._led.blink(severity)
+        except Exception as e:
+            logger.error(f"PiActuator _fire error ({severity}): {e}")
 
     def deactivate(self) -> None:
         self._buzzer.off()
