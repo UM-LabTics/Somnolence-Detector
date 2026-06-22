@@ -24,6 +24,18 @@ async def get_summary(
         env_stmt = env_stmt.where(EnvironmentalReading.device_id == device_id)
     env_row = (await db.execute(env_stmt)).one()
 
+    # Latest environmental reading (most recent single row)
+    latest_env_stmt = (
+        select(EnvironmentalReading)
+        .order_by(EnvironmentalReading.timestamp.desc())
+        .limit(1)
+    )
+    if device_id is not None:
+        latest_env_stmt = latest_env_stmt.where(
+            EnvironmentalReading.device_id == device_id
+        )
+    latest_env = (await db.execute(latest_env_stmt)).scalars().first()
+
     # Alert counts by type
     alert_count_stmt = (
         select(Alert.alert_type, func.count().label("count"))
@@ -59,6 +71,12 @@ async def get_summary(
             "avg_humidity": env_row.avg_humidity,
             "avg_co2": env_row.avg_co2,
         },
+        "latest_environmental": {
+            "temperature": latest_env.temperature if latest_env else None,
+            "humidity": latest_env.humidity if latest_env else None,
+            "co2": latest_env.co2 if latest_env else None,
+            "timestamp": latest_env.timestamp if latest_env else None,
+        } if latest_env else None,
         "alert_counts_by_type": [
             {"alert_type": row.alert_type, "count": row.count} for row in alert_counts
         ],

@@ -74,8 +74,12 @@ class SyncManager:
         )
         self._db.close()
 
-    def queue_alert(self, event: DetectionEvent) -> None:
-        """Persist a DetectionEvent and attempt immediate MQTT publish."""
+    def queue_alert(self, event: DetectionEvent, publish: bool = True) -> None:
+        """Persist a DetectionEvent and optionally publish via MQTT.
+
+        publish=False saves to the local DB (audit trail) but intentionally
+        skips MQTT — used when the vehicle is below the speed threshold.
+        """
         timestamp = datetime.now(timezone.utc).isoformat()
 
         row_id = self._db.save_alert(
@@ -86,6 +90,10 @@ class SyncManager:
             metadata=event.metadata,
             timestamp=timestamp,
         )
+
+        if not publish:
+            self._db.mark_alert_synced(row_id)
+            return
 
         payload = {
             "alert_type": event.alert_type,
@@ -108,14 +116,21 @@ class SyncManager:
             temperature=reading.get("temperature"),
             humidity=reading.get("humidity"),
             co2=reading.get("co2"),
+            gps_lat=reading.get("gps_lat"),
+            gps_lon=reading.get("gps_lon"),
+            gps_speed_kmh=reading.get("gps_speed_kmh"),
+            gps_moving=reading.get("gps_moving"),
+            gps_fix=reading.get("gps_fix"),
             timestamp=timestamp,
         )
 
-        payload = {
-            k: reading[k]
-            for k in ("temperature", "humidity", "co2")
-            if reading.get(k) is not None
-        }
+        payload: dict = {"timestamp": timestamp}
+        for k in ("temperature", "humidity", "co2"):
+            if reading.get(k) is not None:
+                payload[k] = reading[k]
+        for k in ("gps_lat", "gps_lon", "gps_speed_kmh", "gps_moving", "gps_fix", "gps_utc"):
+            if reading.get(k) is not None:
+                payload[k] = reading[k]
 
         if self._mqtt.is_connected:
             if self._mqtt.publish_environmental(payload):
@@ -165,11 +180,11 @@ class SyncManager:
         pending_env = self._db.get_pending_environmental(limit=self._batch_size)
         env_synced = 0
         for reading in pending_env:
-            payload = {
-                k: reading[k]
-                for k in ("temperature", "humidity", "co2")
-                if reading.get(k) is not None
-            }
+            payload: dict = {"timestamp": reading["timestamp"]}
+            for k in ("temperature", "humidity", "co2",
+                      "gps_lat", "gps_lon", "gps_speed_kmh", "gps_moving", "gps_fix"):
+                if reading.get(k) is not None:
+                    payload[k] = reading[k]
             if self._mqtt.publish_environmental(payload):
                 self._db.mark_environmental_synced(reading["id"])
                 env_synced += 1

@@ -26,6 +26,11 @@ CREATE TABLE IF NOT EXISTS environmental_readings (
     temperature REAL,
     humidity REAL,
     co2 REAL,
+    gps_lat REAL,
+    gps_lon REAL,
+    gps_speed_kmh REAL,
+    gps_moving INTEGER,
+    gps_fix INTEGER,
     timestamp TEXT NOT NULL,
     synced INTEGER DEFAULT 0,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
@@ -38,6 +43,15 @@ CREATE INDEX IF NOT EXISTS idx_env_pending
     ON environmental_readings(synced) WHERE synced = 0;
 """
 
+# Columns added after initial schema — applied via ALTER TABLE if missing.
+_ENV_MIGRATIONS = [
+    "ALTER TABLE environmental_readings ADD COLUMN gps_lat REAL",
+    "ALTER TABLE environmental_readings ADD COLUMN gps_lon REAL",
+    "ALTER TABLE environmental_readings ADD COLUMN gps_speed_kmh REAL",
+    "ALTER TABLE environmental_readings ADD COLUMN gps_moving INTEGER",
+    "ALTER TABLE environmental_readings ADD COLUMN gps_fix INTEGER",
+]
+
 
 class LocalDB:
     """Thread-safe SQLite wrapper for local persistence."""
@@ -49,7 +63,15 @@ class LocalDB:
         )
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.executescript(_SCHEMA)
+        self._migrate()
         logger.info(f"LocalDB initialized: {db_path}")
+
+    def _migrate(self) -> None:
+        for stmt in _ENV_MIGRATIONS:
+            try:
+                self._conn.execute(stmt)
+            except sqlite3.OperationalError:
+                pass  # column already exists
 
     def save_alert(
         self,
@@ -75,12 +97,24 @@ class LocalDB:
         humidity: Optional[float],
         co2: Optional[float],
         timestamp: str,
+        gps_lat: Optional[float] = None,
+        gps_lon: Optional[float] = None,
+        gps_speed_kmh: Optional[float] = None,
+        gps_moving: Optional[bool] = None,
+        gps_fix: Optional[bool] = None,
     ) -> int:
         with self._lock:
             cursor = self._conn.execute(
-                "INSERT INTO environmental_readings (temperature, humidity, co2, timestamp) "
-                "VALUES (?, ?, ?, ?)",
-                (temperature, humidity, co2, timestamp),
+                "INSERT INTO environmental_readings "
+                "(temperature, humidity, co2, gps_lat, gps_lon, gps_speed_kmh, gps_moving, gps_fix, timestamp) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    temperature, humidity, co2,
+                    gps_lat, gps_lon, gps_speed_kmh,
+                    int(gps_moving) if gps_moving is not None else None,
+                    int(gps_fix) if gps_fix is not None else None,
+                    timestamp,
+                ),
             )
             return cursor.lastrowid
 
@@ -108,7 +142,8 @@ class LocalDB:
     def get_pending_environmental(self, limit: int = 50) -> list[dict]:
         with self._lock:
             cursor = self._conn.execute(
-                "SELECT id, temperature, humidity, co2, timestamp "
+                "SELECT id, temperature, humidity, co2, "
+                "gps_lat, gps_lon, gps_speed_kmh, gps_moving, gps_fix, timestamp "
                 "FROM environmental_readings WHERE synced = 0 ORDER BY id ASC LIMIT ?",
                 (limit,),
             )
@@ -119,7 +154,12 @@ class LocalDB:
                 "temperature": r[1],
                 "humidity": r[2],
                 "co2": r[3],
-                "timestamp": r[4],
+                "gps_lat": r[4],
+                "gps_lon": r[5],
+                "gps_speed_kmh": r[6],
+                "gps_moving": bool(r[7]) if r[7] is not None else None,
+                "gps_fix": bool(r[8]) if r[8] is not None else None,
+                "timestamp": r[9],
             }
             for r in rows
         ]
