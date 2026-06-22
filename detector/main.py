@@ -50,7 +50,7 @@ def draw_metrics(frame, metrics, config):
         )
         return
 
-    # Line 1: EAR, MAR, PERCLOS
+    # Line 1: EAR, MAR, eye closure duration
     ear_color = (
         (0, 255, 0) if metrics.ear >= config["ear_threshold"] else (0, 0, 255)
     )
@@ -58,15 +58,15 @@ def draw_metrics(frame, metrics, config):
         (0, 255, 0) if metrics.mar < config["mar_threshold"] else (0, 165, 255)
     )
 
-    perclos_pct = metrics.perclos * 100
-    if metrics.perclos >= config["perclos_high_threshold"]:
-        perclos_color = (0, 0, 255)
-    elif metrics.perclos >= config["perclos_medium_threshold"]:
-        perclos_color = (0, 165, 255)
-    elif metrics.perclos >= config["perclos_low_threshold"]:
-        perclos_color = (0, 255, 255)
+    ec_s = metrics.eye_closure_s
+    if ec_s >= config["eye_closure_high_s"]:
+        ec_color = (0, 0, 255)
+    elif ec_s >= config["eye_closure_medium_s"]:
+        ec_color = (0, 165, 255)
+    elif ec_s >= config["eye_closure_low_s"]:
+        ec_color = (0, 255, 255)
     else:
-        perclos_color = (0, 255, 0)
+        ec_color = (0, 255, 0)
 
     y = 30
     cv2.putText(
@@ -78,8 +78,8 @@ def draw_metrics(frame, metrics, config):
         cv2.FONT_HERSHEY_SIMPLEX, 0.6, mar_color, 2,
     )
     cv2.putText(
-        frame, f"PERCLOS: {perclos_pct:.1f}%", (350, y),
-        cv2.FONT_HERSHEY_SIMPLEX, 0.6, perclos_color, 2,
+        frame, f"CLOSED: {ec_s:.1f}s", (350, y),
+        cv2.FONT_HERSHEY_SIMPLEX, 0.6, ec_color, 2,
     )
 
     # Line 2: Head pose

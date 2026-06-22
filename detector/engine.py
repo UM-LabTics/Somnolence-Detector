@@ -10,17 +10,15 @@ import numpy as np
 from ear import LEFT_EYE, RIGHT_EYE, compute_ear
 from head_pose import estimate_head_pose
 from mar import compute_mar
-from perclos import PerclosTracker
 from phone_detector import HandDetector, compute_min_hand_ear_distance
 
 # Default configuration
 DEFAULT_CONFIG = {
-    # EAR / PERCLOS
+    # EAR / Eye closure duration (seconds of continuous closure)
     "ear_threshold": 0.21,
-    "perclos_window_seconds": 60.0,
-    "perclos_low_threshold": 0.15,
-    "perclos_medium_threshold": 0.25,
-    "perclos_high_threshold": 0.40,
+    "eye_closure_low_s": 2.0,
+    "eye_closure_medium_s": 5.0,
+    "eye_closure_high_s": 10.0,
     # MAR / Yawn
     "mar_threshold": 0.55,
     "yawn_consec_frames": 30,  # ~1s at 30fps
@@ -69,7 +67,7 @@ class FrameMetrics:
     pitch: float = 0.0
     yaw: float = 0.0
     roll: float = 0.0
-    perclos: float = 0.0
+    eye_closure_s: float = 0.0   # seconds eyes have been continuously closed
     face_detected: bool = False
     hand_ear_distance: float = math.inf
     hand_detected: bool = False
@@ -100,14 +98,9 @@ class DetectionEngine:
             min_tracking_confidence=cfg["min_tracking_confidence"],
         )
 
-        # PERCLOS tracker
-        self._perclos = PerclosTracker(
-            window_seconds=cfg["perclos_window_seconds"],
-            ear_threshold=cfg["ear_threshold"],
-        )
-
-        # State: PERCLOS alert deduplication
-        self._perclos_severity = None
+        # State: eye closure duration tracking
+        self._eye_closed_since: Optional[float] = None   # monotonic time eyes closed
+        self._eye_closure_severity: Optional[str] = None  # highest severity alerted this instance
 
         # State: Yawn detection
         self._mar_above_count = 0
@@ -154,18 +147,16 @@ class DetectionEngine:
         landmarks = results.multi_face_landmarks[0].landmark
         metrics.face_detected = True
 
-        # 1. EAR + PERCLOS
+        # 1. EAR + eye closure duration
         left_ear = compute_ear(landmarks, LEFT_EYE)
         right_ear = compute_ear(landmarks, RIGHT_EYE)
         avg_ear = (left_ear + right_ear) / 2.0
         metrics.ear = avg_ear
 
         now = time.monotonic()
-        self._perclos.update(avg_ear, timestamp=now)
-        perclos_val = self._perclos.get_perclos()
-        metrics.perclos = perclos_val
-
-        events.extend(self._check_perclos(perclos_val, avg_ear))
+        events.extend(self._check_eye_closure(avg_ear, now))
+        if self._eye_closed_since is not None:
+            metrics.eye_closure_s = now - self._eye_closed_since
 
         # 2. MAR
         mar = compute_mar(landmarks)
@@ -194,35 +185,49 @@ class DetectionEngine:
 
         return events, metrics
 
-    def _check_perclos(self, perclos_val, ear):
-        """Generate EYE_CLOSURE events on severity escalation."""
+    def _check_eye_closure(self, ear, now):
+        """Generate EYE_CLOSURE events based on continuous closure duration.
+
+        Escalates LOW → MEDIUM → HIGH within the same closure instance.
+        Resets when eyes open (EAR >= threshold).
+        """
         events = []
         cfg = self._config
 
-        if perclos_val >= cfg["perclos_high_threshold"]:
-            current = "HIGH"
-        elif perclos_val >= cfg["perclos_medium_threshold"]:
-            current = "MEDIUM"
-        elif perclos_val >= cfg["perclos_low_threshold"]:
-            current = "LOW"
-        else:
-            current = None
+        if ear < cfg["ear_threshold"]:
+            # Eyes closed — start timer if not already running
+            if self._eye_closed_since is None:
+                self._eye_closed_since = now
+                self._eye_closure_severity = None
 
-        # Emit event only on escalation
-        if _SEVERITY_ORDER.get(current, 0) > _SEVERITY_ORDER.get(
-            self._perclos_severity, 0
-        ):
-            events.append(
-                DetectionEvent(
-                    alert_type="EYE_CLOSURE",
-                    severity=current,
-                    value=round(perclos_val, 3),
-                    threshold=cfg[f"perclos_{current.lower()}_threshold"],
+            elapsed = now - self._eye_closed_since
+
+            if elapsed >= cfg["eye_closure_high_s"] and self._eye_closure_severity != "HIGH":
+                self._eye_closure_severity = "HIGH"
+                events.append(DetectionEvent(
+                    alert_type="EYE_CLOSURE", severity="HIGH",
+                    value=round(elapsed, 2), threshold=cfg["eye_closure_high_s"],
                     metadata={"ear": round(ear, 3)},
-                )
-            )
+                ))
+            elif elapsed >= cfg["eye_closure_medium_s"] and self._eye_closure_severity not in ("MEDIUM", "HIGH"):
+                self._eye_closure_severity = "MEDIUM"
+                events.append(DetectionEvent(
+                    alert_type="EYE_CLOSURE", severity="MEDIUM",
+                    value=round(elapsed, 2), threshold=cfg["eye_closure_medium_s"],
+                    metadata={"ear": round(ear, 3)},
+                ))
+            elif elapsed >= cfg["eye_closure_low_s"] and self._eye_closure_severity is None:
+                self._eye_closure_severity = "LOW"
+                events.append(DetectionEvent(
+                    alert_type="EYE_CLOSURE", severity="LOW",
+                    value=round(elapsed, 2), threshold=cfg["eye_closure_low_s"],
+                    metadata={"ear": round(ear, 3)},
+                ))
+        else:
+            # Eyes open — reset instance
+            self._eye_closed_since = None
+            self._eye_closure_severity = None
 
-        self._perclos_severity = current
         return events
 
     def _check_yawn(self, mar):
@@ -355,8 +360,8 @@ class DetectionEngine:
 
     def reset(self):
         """Reset all internal state."""
-        self._perclos.reset()
-        self._perclos_severity = None
+        self._eye_closed_since = None
+        self._eye_closure_severity = None
         self._mar_above_count = 0
         self._in_yawn = False
         self._pitch_above_count = 0

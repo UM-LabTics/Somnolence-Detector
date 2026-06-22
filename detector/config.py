@@ -9,10 +9,9 @@ _DEVICE_ID_FILE = Path(__file__).parent / ".device_id"
 # Detection defaults (same values as engine.DEFAULT_CONFIG)
 _DETECTION_DEFAULTS = {
     "ear_threshold": 0.21,
-    "perclos_window_seconds": 60.0,
-    "perclos_low_threshold": 0.15,
-    "perclos_medium_threshold": 0.25,
-    "perclos_high_threshold": 0.40,
+    "eye_closure_low_s": 2.0,
+    "eye_closure_medium_s": 5.0,
+    "eye_closure_high_s": 10.0,
     "mar_threshold": 0.55,
     "yawn_consec_frames": 30,
     "pitch_threshold": 150.0,
