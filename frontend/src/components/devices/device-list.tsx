@@ -2,8 +2,11 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useNow } from "@/hooks/use-now";
 import type { AlertNotificationResponse, DeviceResponse } from "@/lib/types";
 import { formatRelativeTime } from "@/lib/utils";
+
+const TEN_MIN = 10 * 60 * 1000;
 
 interface DeviceListProps {
   devices: DeviceResponse[];
@@ -11,6 +14,7 @@ interface DeviceListProps {
 }
 
 export function DeviceList({ devices, notifications }: DeviceListProps) {
+  const now = useNow(30_000);
   if (devices.length === 0) {
     return (
       <p className="text-muted-foreground text-center py-8">
@@ -25,6 +29,9 @@ export function DeviceList({ devices, notifications }: DeviceListProps) {
         const pendingCount = notifications.filter(
           (n) => n.device_id === device.id && !n.acknowledged
         ).length;
+        const isOnline =
+          !!device.last_seen_at &&
+          now - new Date(device.last_seen_at).getTime() <= TEN_MIN;
 
         return (
           <Card key={device.id}>
@@ -32,14 +39,14 @@ export function DeviceList({ devices, notifications }: DeviceListProps) {
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base">{device.name}</CardTitle>
                 <Badge
-                  variant={device.is_active ? "default" : "secondary"}
+                  variant={isOnline ? "default" : "secondary"}
                   className={
-                    device.is_active
+                    isOnline
                       ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
                       : ""
                   }
                 >
-                  {device.is_active ? "Activo" : "Inactivo"}
+                  {isOnline ? "Online" : "Offline"}
                 </Badge>
               </div>
             </CardHeader>
