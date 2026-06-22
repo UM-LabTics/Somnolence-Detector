@@ -10,18 +10,24 @@ _DEVICE_ID_FILE = Path(__file__).parent / ".device_id"
 _DETECTION_DEFAULTS = {
     "ear_threshold": 0.21,
     "perclos_window_seconds": 60.0,
-    "perclos_low_threshold": 0.60,
-    "perclos_medium_threshold": 0.70,
-    "perclos_high_threshold": 0.80,
+    "perclos_low_threshold": 0.15,
+    "perclos_medium_threshold": 0.25,
+    "perclos_high_threshold": 0.40,
     "mar_threshold": 0.55,
     "yawn_consec_frames": 30,
-    "pitch_threshold": 15.0,
+    "pitch_threshold": 150.0,
     "nod_consec_frames": 25,
     "nod_sustained_frames": 75,
     "max_num_faces": 1,
     "refine_landmarks": True,
     "min_detection_confidence": 0.5,
     "min_tracking_confidence": 0.5,
+    # Phone use (hand near ear)
+    "phone_distance_threshold": 0.15,
+    "phone_consec_frames": 30,
+    "phone_sustained_frames": 90,
+    "max_num_hands": 2,
+    "hands_model_complexity": 0,
 }
 
 
@@ -58,15 +64,40 @@ def load_config() -> dict:
     config["mqtt_port"] = int(os.environ.get("MQTT_PORT", "1883"))
     config["mqtt_prefix"] = os.environ.get("MQTT_TOPIC_PREFIX", "somnolence")
 
+    # MQTT client identity (AWS IoT Core requires it to match the Thing).
+    # Empty/unset -> paho generates a random id (fine for local Mosquitto).
+    config["mqtt_client_id"] = os.environ.get("MQTT_CLIENT_ID") or None
+
+    # MQTT TLS (mutual auth). Same env var names as the backend client.
+    # Set all three to publish to IoT Core over 8883; unset -> plain local mode.
+    config["mqtt_ca_cert"] = os.environ.get("MQTT_CA_CERT") or None
+    config["mqtt_client_cert"] = os.environ.get("MQTT_CLIENT_CERT") or None
+    config["mqtt_client_key"] = os.environ.get("MQTT_CLIENT_KEY") or None
+
+    # ALPN protocol for MQTT over 443 (set to "x-amzn-mqtt-ca" for AWS IoT
+    # Core on networks that block port 8883). Unset -> standard 8883 path.
+    config["mqtt_alpn"] = os.environ.get("MQTT_ALPN") or None
+
     # Sync
     config["retry_interval"] = 5.0
     config["heartbeat_interval"] = 30.0
     config["batch_size"] = 50
     config["db_path"] = str(Path(__file__).parent / "somnolence_local.db")
 
+    # Camera. On a Raspberry Pi 5 the libcamera/ISP pipeline exposes many
+    # /dev/videoN nodes besides the USB webcam, so index 0 is often wrong.
+    # Use `v4l2-ctl --list-devices` to find the webcam's real index.
+    config["camera_index"] = int(os.environ.get("CAMERA_INDEX", "0"))
+
     # Sensors & Actuators
     config["environmental_interval"] = 30.0
     config["mock_sensors"] = os.environ.get("MOCK_SENSORS", "true").lower() == "true"
     config["mock_actuators"] = os.environ.get("MOCK_ACTUATORS", "true").lower() == "true"
+
+    # Hardware pins (BCM numbering)
+    config["dht11_pin"] = int(os.environ.get("DHT11_PIN", "4"))
+    config["buzzer_pin"] = int(os.environ.get("BUZZER_PIN", "17"))
+    led_pin = os.environ.get("LED_PIN", "")  # empty = LED not wired yet
+    config["led_pin"] = int(led_pin) if led_pin else None
 
     return config

@@ -1,0 +1,86 @@
+name: Deploy Frontend
+
+# main = prod (un solo entorno en AWS). Solo corre si cambió el frontend.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - "frontend-task-def.json"
+      - ".github/workflows/deploy-frontend.yml"
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-2
+  ECR_REPO: somnolence-frontend
+  ECS_CLUSTER: somnolence-cluster
+  ECS_SERVICE: somnolence-frontend-svc
+  TASK_DEF_FILE: frontend-task-def.json
+  CONTAINER_NAME: frontend
+  ALB_URL: https://somnolence-alb-1116710331.us-east-2.elb.amazonaws.com
+
+permissions:
+  id-token: write # requerido por OIDC
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar credenciales AWS (OIDC, sin access keys)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::374648537332:role/gha-somnolence-deploy
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login a ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build + push imagen (runner amd64 = nativo, sin emulación)
+        id: build
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          IMAGE="$REGISTRY/$ECR_REPO:${{ github.sha }}"
+          # NEXT_PUBLIC_API_URL="" => same-origin: el front llama /api/* al mismo ALB
+          docker build \
+            --build-arg NEXT_PUBLIC_API_URL="" \
+            -t "$IMAGE" -t "$REGISTRY/$ECR_REPO:latest" \
+            ./frontend
+          docker push "$IMAGE"
+          docker push "$REGISTRY/$ECR_REPO:latest"
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+
+      - name: Render task definition (inyecta la imagen nueva)
+        id: render
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: ${{ env.TASK_DEF_FILE }}
+          container-name: ${{ env.CONTAINER_NAME }}
+          image: ${{ steps.build.outputs.image }}
+
+      - name: Deploy a ECS (espera estabilidad)
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
+
+      - name: Smoke test (sección 1.6 de DEPLOY.md)
+        run: |
+          set -e
+          echo "health:"; curl -sk --max-time 25 "$ALB_URL/health"; echo
+          curl -sk --max-time 25 "$ALB_URL/health" | grep -q '"status":"ok"'
+          # backend accesible sin auth vía ALB: /openapi.json (la regla del listener lo rutea al backend)
+          openapi=$(curl -sk --max-time 25 -o /dev/null -w "%{http_code}" "$ALB_URL/openapi.json")
+          # /api/* ruteado al backend: respuesta del backend (200 público o 401 si pide auth), NO 307/404 del front
+          api=$(curl -sk --max-time 25 -o /dev/null -w "%{http_code}" "$ALB_URL/api/devices/")
+          front=$(curl -sk --max-time 25 -o /dev/null -w "%{http_code}" "$ALB_URL/")
+          echo "openapi=$openapi api=$api front=$front"
+          [ "$openapi" = "200" ]
+          [ "$api" = "200" ] || [ "$api" = "401" ]
+          [ "$front" -ge 200 ] && [ "$front" -lt 400 ]

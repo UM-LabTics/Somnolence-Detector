@@ -40,6 +40,11 @@ class SyncManager:
             port=config.get("mqtt_port", 1883),
             device_id=device_id,
             prefix=config.get("mqtt_prefix", "somnolence"),
+            client_id=config.get("mqtt_client_id"),
+            ca_cert=config.get("mqtt_ca_cert"),
+            client_cert=config.get("mqtt_client_cert"),
+            client_key=config.get("mqtt_client_key"),
+            alpn=config.get("mqtt_alpn"),
         )
 
         self._stop_event = threading.Event()

@@ -55,7 +55,10 @@ export function HistoryFilters({
       </div>
       <div className="space-y-1">
         <label className="text-sm font-medium text-muted-foreground">Agrupar por</label>
-        <Select value={groupBy} onValueChange={onGroupByChange}>
+        <Select
+          value={groupBy}
+          onValueChange={(v) => onGroupByChange(v ?? "day")}
+        >
           <SelectTrigger className="w-32">
             <SelectValue />
           </SelectTrigger>
@@ -68,7 +71,10 @@ export function HistoryFilters({
       </div>
       <div className="space-y-1">
         <label className="text-sm font-medium text-muted-foreground">Dispositivo</label>
-        <Select value={deviceId} onValueChange={onDeviceIdChange}>
+        <Select
+          value={deviceId}
+          onValueChange={(v) => onDeviceIdChange(v ?? "all")}
+        >
           <SelectTrigger className="w-48">
             <SelectValue />
           </SelectTrigger>

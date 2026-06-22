@@ -1,80 +1,106 @@
 "use client";
 
-import { AlertTriangle, ThermometerSun } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { TimelineEvent } from "@/lib/types";
-import { formatAlertType, formatTime } from "@/lib/utils";
+import { useMemo } from "react";
+import type { DeviceResponse, TimelineEvent } from "@/lib/types";
+import { cn, formatAlertType, formatTime } from "@/lib/utils";
+
+const SEV_TONE: Record<string, string> = {
+  HIGH: "text-critical",
+  MEDIUM: "text-warn",
+  LOW: "text-info",
+};
 
 interface EventTimelineProps {
   events: TimelineEvent[] | null;
+  devices: DeviceResponse[] | null;
+  className?: string;
 }
 
-const SEVERITY_STYLES: Record<string, string> = {
-  LOW: "bg-[var(--severity-low)] text-foreground",
-  MEDIUM: "bg-[var(--severity-medium)] text-foreground",
-  HIGH: "bg-[var(--severity-high)] text-white",
-};
+export function EventTimeline({
+  events,
+  devices,
+  className,
+}: EventTimelineProps) {
+  const deviceName = useMemo(() => {
+    const map = new Map(devices?.map((d) => [d.id, d.name]) ?? []);
+    return (id: string) => map.get(id) ?? id.slice(0, 6);
+  }, [devices]);
 
-export function EventTimeline({ events }: EventTimelineProps) {
-  const items = events ?? [];
+  const items = (events ?? []).slice(0, 60);
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Linea de Tiempo</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {items.length === 0 ? (
-          <p className="text-muted-foreground text-sm py-8 text-center">
-            Sin eventos
-          </p>
-        ) : (
-          <div className="max-h-[400px] space-y-2 overflow-y-auto pr-2">
-            {items.slice(0, 50).map((event, i) => (
-              <div
-                key={`${event.timestamp}-${i}`}
-                className="flex items-start gap-3 rounded-md border p-2 text-sm"
-              >
-                {event.event_type === "alert" ? (
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--chart-4)]" />
-                ) : (
-                  <ThermometerSun className="mt-0.5 h-4 w-4 shrink-0 text-[var(--chart-1)]" />
-                )}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground font-mono text-xs">
-                      {formatTime(event.timestamp)}
-                    </span>
-                    {event.event_type === "alert" && event.severity && (
-                      <Badge
-                        className={SEVERITY_STYLES[event.severity] ?? ""}
-                        variant="secondary"
+    <div
+      className={cn(
+        "flex flex-col bg-card/60 ring-1 ring-border",
+        className
+      )}
+    >
+      <div className="flex items-center justify-between border-b border-border px-6 py-3">
+        <span className="mono-label">Event Log · realtime</span>
+        <span className="mono-label tabular">{items.length} rows</span>
+      </div>
+
+      {items.length === 0 ? (
+        <div className="mono-label flex flex-1 items-center justify-center py-12">
+          Sin eventos registrados
+        </div>
+      ) : (
+        <div className="relative max-h-[440px] overflow-y-auto">
+          <table className="w-full font-mono tabular text-xs">
+            <tbody>
+              {items.map((e, i) => {
+                const isAlert = e.event_type === "alert";
+                const sev =
+                  isAlert && e.severity
+                    ? SEV_TONE[e.severity]
+                    : "text-muted-foreground";
+                return (
+                  <tr
+                    key={`${e.timestamp}-${i}`}
+                    className="border-b border-border/40 transition-colors last:border-0 hover:bg-accent/40"
+                  >
+                    <td className="whitespace-nowrap px-5 py-2 text-muted-foreground">
+                      {formatTime(e.timestamp)}
+                    </td>
+                    <td className="px-2 py-2">
+                      <span
+                        className={cn(
+                          "inline-block w-16 text-[0.6rem] font-semibold tracking-[0.2em]",
+                          sev
+                        )}
                       >
-                        {event.severity}
-                      </Badge>
-                    )}
-                  </div>
-                  {event.event_type === "alert" ? (
-                    <p>
-                      {formatAlertType(event.alert_type ?? "")}{" "}
-                      <span className="text-muted-foreground">
-                        (valor: {event.value?.toFixed(2)})
+                        {isAlert ? e.severity ?? "ALERT" : "ENV"}
                       </span>
-                    </p>
-                  ) : (
-                    <p className="text-muted-foreground">
-                      {event.temperature != null && `${event.temperature.toFixed(1)}°C `}
-                      {event.humidity != null && `${event.humidity.toFixed(1)}% `}
-                      {event.co2 != null && `${Math.round(event.co2)} ppm`}
-                    </p>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+                    </td>
+                    <td className="min-w-0 px-2 py-2 text-foreground/80">
+                      {isAlert ? (
+                        <span>
+                          <span className="text-foreground">
+                            {formatAlertType(e.alert_type ?? "")}
+                          </span>
+                          <span className="text-muted-foreground">
+                            {" "}
+                            · val {e.value?.toFixed(2) ?? "—"}
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">
+                          {e.temperature?.toFixed(1)}°C ·{" "}
+                          {e.humidity?.toFixed(0)}% ·{" "}
+                          {Math.round(e.co2 ?? 0)} ppm
+                        </span>
+                      )}
+                    </td>
+                    <td className="whitespace-nowrap px-5 py-2 text-right text-muted-foreground">
+                      {deviceName(e.device_id)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
   );
 }
