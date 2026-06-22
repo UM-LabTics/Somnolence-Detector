@@ -31,7 +31,7 @@ class MockSensor(SensorInterface):
         self._co2 = 450.0
         self._lat = -34.6037
         self._lon = -58.3816
-        self._speed = 60.0  # start as if moving
+        self._speed = 0.0  # desktop demo — parked
 
     def current_speed_kmh(self) -> Optional[float]:
         return round(self._speed, 1)
@@ -40,7 +40,7 @@ class MockSensor(SensorInterface):
         self._temp = max(15.0, min(40.0, self._temp + random.uniform(-0.3, 0.3)))
         self._humidity = max(20.0, min(90.0, self._humidity + random.uniform(-1.0, 1.0)))
         self._co2 = max(350.0, min(2000.0, self._co2 + random.uniform(-10.0, 10.0)))
-        self._speed = max(0.0, min(130.0, self._speed + random.uniform(-2.0, 2.0)))
+        self._speed = 0.0  # fixed at 0 — desktop demo
         return {
             "temperature": round(self._temp, 1),
             "humidity": round(self._humidity, 1),
