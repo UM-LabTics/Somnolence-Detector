@@ -70,7 +70,7 @@ export function FleetStatus({
 
     const FIVE_MIN = 5 * 60 * 1000;
     const FIFTEEN_MIN = 15 * 60 * 1000;
-    const TEN_MIN = 10 * 60 * 1000;
+    const ONLINE_WINDOW = 5 * 60 * 1000;
 
     let alerts15 = 0;
     let criticals5 = 0;
@@ -86,7 +86,7 @@ export function FleetStatus({
     const total = devices?.length ?? 0;
     const online = (devices ?? []).filter((d) => {
       if (!d.is_active || !d.last_seen_at) return false;
-      return now - parseUtc(d.last_seen_at).getTime() <= TEN_MIN;
+      return now - parseUtc(d.last_seen_at).getTime() <= ONLINE_WINDOW;
     }).length;
 
     let status: Status = "nominal";

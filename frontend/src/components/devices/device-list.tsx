@@ -6,7 +6,7 @@ import { useNow } from "@/hooks/use-now";
 import type { AlertNotificationResponse, DeviceResponse } from "@/lib/types";
 import { formatRelativeTime, parseUtc } from "@/lib/utils";
 
-const TEN_MIN = 10 * 60 * 1000;
+const ONLINE_WINDOW = 5 * 60 * 1000;
 
 interface DeviceListProps {
   devices: DeviceResponse[];
@@ -31,7 +31,7 @@ export function DeviceList({ devices, notifications }: DeviceListProps) {
         ).length;
         const isOnline =
           !!device.last_seen_at &&
-          now - parseUtc(device.last_seen_at).getTime() <= TEN_MIN;
+          now - parseUtc(device.last_seen_at).getTime() <= ONLINE_WINDOW;
 
         return (
           <Card key={device.id}>
